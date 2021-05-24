@@ -1,10 +1,10 @@
-﻿# This script was written for Windows 10 Pro (20H2) -- it has not been tested on Windows 10 Home.
+﻿# Version 1.1.0
+# This script was written for Windows 10 Pro (20H2) -- it has not been tested on Windows 10 Home.
 # Goal: Debloat Windows 10, improve performance, and enhance user privacy and experience.
 
 # Requirements: Run with elevated privileges (i.e., Administrator)
 # WSL2 Install Documentation: https://docs.microsoft.com/en-us/windows/wsl/install-win10
 # Linux Distro Install Documentation: https://docs.microsoft.com/en-us/windows/wsl/install-manual
-
 
 function Debloat-Windows {
 
@@ -395,15 +395,16 @@ function Fix-DMWService {
     # Fixes the DMW service if it happens to be disabled or stopped.
     Write-Host "Potentially fixing the Device Management WAP Push message Routing Service..." -ForegroundColor Yellow
   
-    If (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
+    if (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
         Set-Service -Name dmwappushservice -StartupType Automatic
     }
 
-    If (Get-Service -Name dmwappushservice | Where-Object {$_.Status -eq "Stopped"}) {
+    if (Get-Service -Name dmwappushservice | Where-Object {$_.Status -eq "Stopped"}) {
         Start-Service -Name dmwappushservice
     }
     Write-Host "Done." -ForegroundColor Green
 }
+
 function Improve-UserExperience {
     
     # Remove Bing from search
@@ -446,7 +447,7 @@ function Improve-UserExperience {
     Set-ExecutionPolicy Bypass -Scope Process -Force; Set-ItemProperty -Path $SearchMode -Name 'EnableFindMyFiles' -Value 1
     Write-Host "Done." -ForegroundColor Green
     #>
-    
+
 
     # Disables live tiles
     Write-Host "Disabling Live Tiles in the Start Menu..." -ForegroundColor Yellow
@@ -487,7 +488,7 @@ function Improve-UserExperience {
     Set-ItemProperty -Path $SearchBox -Name "SearchboxTaskbarMode" -Value 0
     Write-Host "Done." -ForegroundColor Green
 }
-function Get-GoodShit {
+function Get-TheBasics {
 
     # Disable IE first time run wizard (for Invoke-WebRequest support)
     Write-Host "Disabling IE first time run wizard for 'Invoke-WebRequest' support..." -ForegroundColor Yellow
@@ -499,34 +500,34 @@ function Get-GoodShit {
 
     # Update PowerShell
     Write-Host "Updating PowerShell 'Get-Help' cmdlet..." -ForegroundColor Yellow
-    #Update-Help 2>$NULL
+    Update-Help 2>$NULL
     Write-Host "Done." -ForegroundColor Green
     
     
     # .NET 3.5
     Write-Host "Installing .NET 3.5..." -ForegroundColor Yellow
     DISM /Online /Enable-Feature /FeatureName:NetFx3 /All
-    #Enable-WindowsOptionalFeature -Online -NoRestart -FeatureName NetFx3 -All | Out-Null
     Write-Host "Done." -ForegroundColor Green
 
 
-    # Chocolatey
-    Write-Host "Installing Chocolatey..." -ForegroundColor Yellow
-    #Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-Expression (Invoke-WebRequest https://chocolatey.org/install.ps1).content | Out-Null
-    Invoke-Expression (Invoke-WebRequest https://chocolatey.org/install.ps1).content | Out-Null
-    choco install chocolatey-core.extension -y | Out-Null
-    Write-Host "Done." -ForegroundColor Green
+    if ($ToolBool) {
+        # Chocolatey
+        Write-Host "Installing Chocolatey..." -ForegroundColor Yellow
+        Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-Expression (Invoke-WebRequest https://chocolatey.org/install.ps1).content | Out-Null
+        choco install chocolatey-core.extension -y | Out-Null
+        Write-Host "Done." -ForegroundColor Green
 
 
-    # The Basics
-    Write-Host "Installing the basics..." -ForegroundColor Yellow
-    choco install git --params "/GitOnlyOnPath /NoShellIntegration" -y | Out-Null ; "- git"
-    choco install vim --params "'/NoContextmenu /NoDesktopShortcuts /InstallDir:C:\.Tools'" -y | Out-Null ; "- vim"
-    choco install notepadplusplus -ia /D=C:\.Tools\Notepad++ -y | Out-Null ; "- notepadplusplus"
-    choco install 7zip -ia /D=C:\.Tools\7-Zip+ -y | Out-Null ; "- 7zip"
-    choco install powershell-core --install-arguments='"ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1"' -y | Out-Null ; "- powershell-core"
-    choco install microsoft-windows-terminal -y | Out-Null ; "- microsoft-windows-terminal"
-    Write-Host "Done." -ForegroundColor Green
+        # The Basics
+        Write-Host "Installing the basics..." -ForegroundColor Yellow
+        choco install git --params "/GitOnlyOnPath /NoShellIntegration" -y | Out-Null ; "- git"
+        choco install vim --params "'/NoContextmenu /NoDesktopShortcuts /InstallDir:C:\.Tools'" -y | Out-Null ; "- vim"
+        choco install notepadplusplus -ia /D=C:\.Tools\Notepad++ -y | Out-Null ; "- notepadplusplus"
+        choco install 7zip -ia /D=C:\.Tools\7-Zip+ -y | Out-Null ; "- 7zip"
+        choco install powershell-core --install-arguments='"ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1"' -y | Out-Null ; "- powershell-core"
+        choco install microsoft-windows-terminal -y | Out-Null ; "- microsoft-windows-terminal"
+        Write-Host "Done." -ForegroundColor Green
+    }
 }
 function Install-WSL2 {
 
@@ -578,10 +579,16 @@ function Install-WSL2 {
 }
 
 
+# Prompt for Choco (and tools) Installation
+Write-Host "`nInstall Chocolatey (and Tools)?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt1 = Read-Host
+if (($Prompt1 -eq 'y') -or ($Prompt1 -eq 'yes')) { $ToolBool = $TRUE }
+else { $ToolBool = $FALSE }
+
+
 # Prompt for WSL2 Installation
-Write-Host "Install Windows Subsystem for Linux?`n[y/n]: " -NoNewLine -ForegroundColor Yellow; $Prompt = Read-Host
-if (($Prompt -eq 'y') -or ($Prompt -eq 'yes')) { $WSL2Boolean = $TRUE }
-else { $WSL2Boolean = $FALSE }
+Write-Host "`nInstall Windows Subsystem for Linux?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt2 = Read-Host
+if (($Prompt2 -eq 'y') -or ($Prompt2 -eq 'yes')) { $WSL2Bool = $TRUE }
+else { $WSL2Bool = $FALSE }
 
 
 #Creates a "drive" to access the HKCR (HKEY_CLASSES_ROOT)
@@ -649,13 +656,13 @@ Start-Sleep 1
 
 
 Write-Host "`n────────────────────────"
-Write-Host "Installing the Good Shit" -ForegroundColor Magenta
+Write-Host "Installing Helpful Tools" -ForegroundColor Magenta
 Write-Host "────────────────────────"
-Get-GoodShit
+Get-TheBasics
 Start-Sleep 1
 
 
-if ($WSL2Boolean) {
+if ($WSL2Bool) {
     Write-Host "`n──────────────────────────────────────"
     Write-Host "Installing Windows Subsystem for Linux" -ForegroundColor Magenta
     Write-Host "──────────────────────────────────────"
