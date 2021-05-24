@@ -1,0 +1,61 @@
+# Requirements: Run with elevated privileges (i.e., Administrator)
+
+# WSL2 Installation: https://docs.microsoft.com/en-us/windows/wsl/install-win10
+# Linux Distro Installation: https://docs.microsoft.com/en-us/windows/wsl/install-manual
+# Ubuntu 20.04 (https://aka.ms/wslubuntu2004)
+
+function Install-WSL2 {
+    
+    ### Windows Subsystem for Linux (Part 1) -- Install Dependencies
+    $NeedDependency1 = (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -ne 'Enabled'
+    $NeedDependency2 = (Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -ne 'Enabled'
+
+    if ($NeedDependency1 -or $NeedDependency2) {
+        Write-Host "Installing Windows Subsystem for Linux dependencies..." -ForegroundColor Yellow
+        DISM /Online /Enable-Feature /featurename:Microsoft-Windows-Subsystem-Linux /All /NoRestart
+        DISM /Online /Enable-Feature /featurename:VirtualMachinePlatform /All /NoRestart
+        Write-Host "Done." -ForegroundColor Green
+
+        $Reboot = $TRUE
+    }
+
+
+    ### Windows Subsystem for Linux (Part 2) -- Download WSL2 Kernel Package
+    Write-Host "Downloading WSL2 kernel package..." -ForegroundColor Yellow
+    $WSL2Kernel = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi'
+    $WSL2Output = "$env:TEMP\WSL2_Update.msi"
+    (New-Object System.Net.WebClient).DownloadFile($WSL2Kernel, $WSL2Output)
+    Write-Host "Done." -ForegroundColor Green
+
+
+    ### Windows Subsystem for Linux (Part 3) -- Install WSL2 Kernel Package
+    
+    # Simple script added to RunOnce key to install/enable WSL2 after reboot.
+    if ($Reboot) {
+        Write-Host "Creating script to install and set WSL to version 2 after the restart..." -ForegroundColor Yellow
+        #$Command = ". `$env:TEMP\WSL2_Update.msi /passive /norestart; write-host 'Press any key to continue...' -f y; `$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown'); wsl --set-default-version 2; rm `$env:TEMP -r -fo; write-host 'Done!' -f y; sleep 3"
+        $Command = "msiexec /i `$env:TEMP\WSL2_Update.msi /passive; write-host 'Press any key to continue installation...' -f y; `$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown'); rm `$env:TEMP -r -fo; wsl --set-default-version 2; write-host 'Done!' -f y; sleep 3"
+        Set-ItemProperty -Path 'Registry::HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WSL2 Setup' -Value "powershell `"$Command`""
+        Write-Host "Done." -ForegroundColor Green
+        Start-Sleep -Seconds 1
+
+        # Restart
+        Write-Host "`nRebooting." -ForegroundColor Red
+        Start-Sleep -Seconds 1
+        shutdown /r /t 3
+    }
+
+    # Install WSL2 Kernel without rebooting
+    else {
+        Write-Host "Installing the WSL2 kernel package..." -ForegroundColor Yellow
+        msiexec /i $env:TEMP\WSL2_Update.msi /passive
+        Start-Sleep -Seconds 3
+        Remove-Item $WSL2Output -Force
+        Write-Host "Done." -ForegroundColor Green
+
+        Write-Host "Setting default version to WSL2..." -ForegroundColor Yellow
+        wsl --set-default-version 2
+        Write-Host "Done." -ForegroundColor Green
+    }
+}
+Install-WSL2
