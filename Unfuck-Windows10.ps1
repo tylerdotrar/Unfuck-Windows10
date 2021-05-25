@@ -1,10 +1,29 @@
-﻿# Version 1.1.0
-# This script was written for Windows 10 Pro (20H2) -- it has not been tested on Windows 10 Home.
-# Goal: Debloat Windows 10, improve performance, and enhance user privacy and experience.
+﻿<#
+Unfuck-Windows10.ps1 
+Version 1.2.4
+This script was tested on Windows 10 Pro (version 20H2) -- it has not been tested on Windows 10 Home.
 
-# Requirements: Run with elevated privileges (i.e., Administrator)
-# WSL2 Install Documentation: https://docs.microsoft.com/en-us/windows/wsl/install-win10
-# Linux Distro Install Documentation: https://docs.microsoft.com/en-us/windows/wsl/install-manual
+Purpose:         Debloat Windows 10, improve performance, and enhance user privacy & experience.
+Requirements:    Run with elevated privileges (i.e., Administrator)
+Syntax:          iex ((New-Object System.Net.WebClient).DownloadString('https://git.io/JspIT'))
+
+Links:
+https://github.com/tylerdotrar/Unfuck-Windows10
+https://git.io/JspIT
+#>
+
+
+# Prompt for Choco (and tools) Installation
+Write-Host "`nInstall Chocolatey (and common tools)?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt1 = Read-Host
+if (($Prompt1 -eq 'y') -or ($Prompt1 -eq 'yes')) { $ToolBool = $TRUE }
+else { $ToolBool = $FALSE }
+
+
+# Prompt for WSL2 Installation
+Write-Host "`nInstall Windows Subsystem for Linux?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt2 = Read-Host
+if (($Prompt2 -eq 'y') -or ($Prompt2 -eq 'yes')) { $WSL2Bool = $TRUE }
+else { $WSL2Bool = $FALSE }
+
 
 function Debloat-Windows {
 
@@ -37,11 +56,6 @@ function Debloat-Windows {
         "Microsoft.WindowsFeedbackHub"
         "Microsoft.WindowsMaps"
         "Microsoft.WindowsSoundRecorder"
-        "Microsoft.Xbox.TCUI"
-        "Microsoft.XboxApp"
-        "Microsoft.XboxGameOverlay"
-        "Microsoft.XboxIdentityProvider"
-        "Microsoft.XboxSpeechToTextOverlay"
         "Microsoft.ZuneMusic"
         "Microsoft.ZuneVideo"
 
@@ -50,12 +64,17 @@ function Debloat-Windows {
         "*Microsoft.BingWeather*"
         "*Microsoft.MicrosoftStickyNotes*"
         
-        #"microsoft.windowscommunicationsapps" # Mail / Calendar
+        #"microsoft.windowscommunicationsapps" # Mail/Calendar
+        #"Microsoft.WindowsCamera"
+        #"*Microsoft.MSPaint*"
         #"*Microsoft.Windows.Photos*"
         #"*Microsoft.WindowsCalculator*"
         #"*Microsoft.WindowsStore*"
-        #"*Microsoft.MSPaint*"
-
+        #"Microsoft.Xbox.TCUI"
+        #"Microsoft.XboxApp"
+        #"Microsoft.XboxGameOverlay"
+        #"Microsoft.XboxIdentityProvider"
+        #"Microsoft.XboxSpeechToTextOverlay"
 
         # Sponsored Windows 10 AppX Apps
         "*EclipseManager*"
@@ -86,7 +105,7 @@ function Debloat-Windows {
     Write-Host "Done." -ForegroundColor Green
 
     # Remaining Xbox related bloat
-    Write-Host "Removing remaining Xbox related bloat..." -ForegroundColor Yellow
+    Write-Host "Removing all Xbox related bloat..." -ForegroundColor Yellow
     Get-ProvisionedAppxPackage -Online | ? { $_.PackageName -match "xbox" } | % { 
         Remove-ProvisionedAppxPackage -Online -AllUsers -PackageName $_.PackageName | Out-Null
         Write-Host "-" $_.DisplayName
@@ -94,8 +113,6 @@ function Debloat-Windows {
     Write-Host "Done." -ForegroundColor Green
 }
 function Remove-Keys {
-        
-    #These are the registry keys that it will delete.
             
     $Keys = @(
             
@@ -125,17 +142,15 @@ function Remove-Keys {
         "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.PPIProjection_10.0.15063.0_neutral_neutral_cw5n1h2txyewy"
         "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.XboxGameCallableUI_1000.15063.0.0_neutral_neutral_cw5n1h2txyewy"
         "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.XboxGameCallableUI_1000.16299.15.0_neutral_neutral_cw5n1h2txyewy"
-               
+            
         # Windows Share Target
         "HKCR:\Extensions\ContractId\Windows.ShareTarget\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
     )
         
-    #This writes the output of each key it is removing and also removes the keys listed above.
+
+    # Remove Registry Keys
     Write-Host "Attempting to remove keys from the Registry..." -ForegroundColor Yellow
-    ForEach ($Key in $Keys) {
-        Write-Output "- $Key"
-        Remove-Item $Key -Recurse 2>$NULL
-    }
+    foreach ($Key in $Keys) { Remove-Item $Key -Recurse 2>$NULL ; "- $Key" }
     Write-Host "Done." -ForegroundColor Green
 }
 function Protect-Privacy {
@@ -331,12 +346,11 @@ function Uninstall-OneDrive {
     Get-Process OneDrive | Stop-Process -Force
     Get-Process explorer | Stop-Process -Force
 
-    if (Test-Path "$env:systemroot\System32\OneDriveSetup.exe") {
-        & "$env:systemroot\System32\OneDriveSetup.exe" /uninstall
-    }
-    if (Test-Path "$env:systemroot\SysWOW64\OneDriveSetup.exe") {
-        & "$env:systemroot\SysWOW64\OneDriveSetup.exe" /uninstall
-    }
+    $64bit = "$env:SYSTEMROOT\System32\OneDriveSetup.exe"
+    $32bit = "$env:SYSTEMROOT\SysWOW64\OneDriveSetup.exe"
+
+    if (Test-Path $64bit) { & $64bit /uninstall }
+    if (Test-Path $32bit) { & $32bit /uninstall }
     Write-Host "Done." -ForegroundColor Green
 
     Write-Host "Removing 'OneDrive' leftovers..." -ForegroundColor Yellow
@@ -362,13 +376,6 @@ function Uninstall-OneDrive {
     Remove-Item "$env:userprofile\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk" -Force -ErrorAction SilentlyContinue
     Write-Host "Done." -ForegroundColor Green
 
-
-    # Show File Extensions in Explorer
-    Write-Host "Setting Explorer to display file extensions..." -ForegroundColor Yellow
-    $ExplorerPath = "Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
-    Write-Host "Done." -ForegroundColor Green
-
     Write-Host "Restarting explorer.exe..." -ForegroundColor Yellow
     Start-Process "explorer.exe"
 
@@ -377,24 +384,20 @@ function Uninstall-OneDrive {
 }
 function Remove-3DObjects {
 
-    #Removes 3D Objects from the 'My Computer' submenu in explorer
+    # Removes 3D Objects from the 'My Computer' submenu in explorer
     Write-Host "Removing 3D Objects from explorer 'My Computer' submenu..." -ForegroundColor Yellow
     $Objects32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
     $Objects64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
 
-    if (Test-Path $Objects32) {
-        Remove-Item $Objects32 -Recurse 
-    }
-    if (Test-Path $Objects64) {
-        Remove-Item $Objects64 -Recurse 
-    }
+    if (Test-Path $Objects32) { Remove-Item $Objects32 -Recurse }
+    if (Test-Path $Objects64) { Remove-Item $Objects64 -Recurse }
     Write-Host "Done." -ForegroundColor Green
 }
 function Fix-DMWService {
 
     # Fixes the DMW service if it happens to be disabled or stopped.
     Write-Host "Potentially fixing the Device Management WAP Push message Routing Service..." -ForegroundColor Yellow
-  
+
     if (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
         Set-Service -Name dmwappushservice -StartupType Automatic
     }
@@ -404,7 +407,6 @@ function Fix-DMWService {
     }
     Write-Host "Done." -ForegroundColor Green
 }
-
 function Improve-UserExperience {
     
     # Remove Bing from search
@@ -421,7 +423,7 @@ function Improve-UserExperience {
     if (!(Test-Path $Bandwidth)) { New-Item $Bandwidth -Force | Out-Null }
     Set-ItemProperty -Path $Bandwidth -Name "NonBestEffortLimit" -Value 0
     Write-Host "Done." -ForegroundColor Green
-
+    
 
     # Unlock and Enable 'Ultimate Performance' Power Plan
     Write-Host "Unlocking and enabling the 'Ultimate Performance' power plan..." -ForegroundColor Yellow
@@ -439,6 +441,13 @@ function Improve-UserExperience {
     Write-Host "Done." -ForegroundColor Green
 
 
+    # Show File Extensions in Explorer
+    Write-Host "Setting Explorer to display file extensions..." -ForegroundColor Yellow
+    $ExplorerPath = "Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
+    Write-Host "Done." -ForegroundColor Green
+
+
     ### CURRENTLY BROKEN DUE TO REGISTRY PERMISSIONS ###
     <#
     # Set Windows Search to use 'Enhanced' Mode
@@ -448,44 +457,69 @@ function Improve-UserExperience {
     Write-Host "Done." -ForegroundColor Green
     #>
 
+    # Remove items from Taskbar
+    
 
-    # Disables live tiles
+    # Disable Live Tiles
     Write-Host "Disabling Live Tiles in the Start Menu..." -ForegroundColor Yellow
-    $LiveTiles = "HKCU:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications"    
+    $LiveTiles = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications'
     if (!(Test-Path $LiveTiles)) { New-Item $LiveTiles -Force | Out-Null }
-    Set-ItemProperty -Path $LiveTiles  -Name 'NoTileApplicationNotification' -Value 1
+    Set-ItemProperty -Path $LiveTiles -Name 'NoTileApplicationNotification' -Value 1
     Write-Host "Done." -ForegroundColor Green
 
+
+    ### Taskbar Overhaul
+
+    # Remove Microsoft Edge and Microsoft Store from Taskbar
+    Write-Host "Removing 'Microsoft Store' and 'Microsoft Edge' from the Taskbar..."
+    $ObjectList = (New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items()
+
+    $Items = @('Microsoft Store', 'Microsoft Edge')
+    foreach ($Item in $Items) { 
+        $ObjectList | ? { $_.Name -eq $Item } | % {$_.Verbs()} | ? { $_.Name.Replace('&','') -eq 'Unpin from Taskbar' } | % { $_.DoIt() }
+    }
+    $ObjectList = $NULL
+    Write-Host "Done." -ForegroundColor Green
 
     # Remove 'People' icon from Taskbar
     Write-Host "Removing 'People' from the Taskbar..." -ForegroundColor Yellow
-    $People = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
+    $People = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
     if (!(Test-Path $People)) { New-Item $People -Force | Out-Null }
     Set-ItemProperty -Path $People -Name PeopleBand -Value 0
     Write-Host "Done." -ForegroundColor Green
- 
- 
+
     # Remove 'Meet Now' from the Taskbar
     Write-Host "Removing 'Meet Now' from the Taskbar..." -ForegroundColor Yellow
     $MeetNow = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
     if (!(Test-Path $MeetNow)) { New-Item $MeetNow -Force | Out-Null }
     Set-ItemProperty -Path $MeetNow -Name "HideSCAMeetNow" -Value 1
     Write-Host "Done." -ForegroundColor Green
- 
- 
+
     # Remove 'TaskView' from the Taskbar
     Write-Host "Removing 'Task View' from the Taskbar..." -ForegroundColor Yellow
     $TaskView = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     if (!(Test-Path $TaskView)) { New-Item $TaskView -Force | Out-Null }
     Set-ItemProperty -Path $TaskView -Name "ShowTaskViewButton" -Value 0
     Write-Host "Done." -ForegroundColor Green
- 
- 
+
     # Hide Search Box on Taskbar
     Write-Host "Hiding Search Box on the Taskbar..." -ForegroundColor Yellow
     $SearchBox = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
     if (!(Test-Path $SearchBox)) { New-Item $SearchBox -Force | Out-Null }
     Set-ItemProperty -Path $SearchBox -Name "SearchboxTaskbarMode" -Value 0
+    Write-Host "Done." -ForegroundColor Green
+
+
+    # Cleanup TEMP directory
+    Write-Host "Cleaning up the TEMP directory..." -ForegroundColor Yellow
+    Remove-Item -Path $env:TEMP -Recurse -Force -ErrorAction SilentlyContinue
+    if (!(Test-Path $env:TEMP)) { New-Item $env:TEMP -Type Directory | Out-Null }
+    Write-Host "Done." -ForegroundColor Green
+
+
+    # Verify system files
+    Write-Host "Verifying system integrity..." -ForegroundColor Yellow
+    sfc /scannow
     Write-Host "Done." -ForegroundColor Green
 }
 function Get-TheBasics {
@@ -498,15 +532,15 @@ function Get-TheBasics {
     Write-Host "Done." -ForegroundColor Green
 
 
-    # Update PowerShell
+    # Update 'Get-Help'
     Write-Host "Updating PowerShell 'Get-Help' cmdlet..." -ForegroundColor Yellow
     Update-Help 2>$NULL
     Write-Host "Done." -ForegroundColor Green
     
-    
-    # .NET 3.5
-    Write-Host "Installing .NET 3.5..." -ForegroundColor Yellow
-    DISM /Online /Enable-Feature /FeatureName:NetFx3 /All
+
+    # Enable .NET Framework 3.5
+    Write-Host "Installing .NET Framework 3.5..." -ForegroundColor Yellow
+    if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -ne 'Enabled') { DISM /Online /Enable-Feature /FeatureName:NetFx3 /All }
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -579,19 +613,7 @@ function Install-WSL2 {
 }
 
 
-# Prompt for Choco (and tools) Installation
-Write-Host "`nInstall Chocolatey (and Tools)?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt1 = Read-Host
-if (($Prompt1 -eq 'y') -or ($Prompt1 -eq 'yes')) { $ToolBool = $TRUE }
-else { $ToolBool = $FALSE }
-
-
-# Prompt for WSL2 Installation
-Write-Host "`nInstall Windows Subsystem for Linux?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt2 = Read-Host
-if (($Prompt2 -eq 'y') -or ($Prompt2 -eq 'yes')) { $WSL2Bool = $TRUE }
-else { $WSL2Bool = $FALSE }
-
-
-#Creates a "drive" to access the HKCR (HKEY_CLASSES_ROOT)
+#Create a "Drive" to access the HKCR (HKEY_CLASSES_ROOT)
 Write-Host "`n──────────────────────────────────────────────────────────────────────────────"
 Write-Host "Creating PSDrive 'HKCR' (HKEY_CLASSES_ROOT).`n(This is necessary for the removal and modification of specific registry keys)"  -ForegroundColor Magenta
 Write-Host "──────────────────────────────────────────────────────────────────────────────"
@@ -599,6 +621,7 @@ New-PSDrive HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT
 Start-Sleep 1
 
 
+# Remove Bloatware
 Write-Host "`n─────────────────────────────────"
 Write-Host "Uninstalling Windows 10 Bloatware" -ForegroundColor Magenta
 Write-Host "─────────────────────────────────"
@@ -606,6 +629,7 @@ Debloat-Windows
 Start-Sleep 1
 
 
+# Remove Registry Keys
 Write-Host "`n───────────────────────────────────"
 Write-Host "Removing Questionable Registry Keys" -ForegroundColor Magenta
 Write-Host "───────────────────────────────────"
@@ -613,6 +637,7 @@ Remove-Keys
 Start-Sleep 1
 
 
+# Improve User Privacy
 Write-Host "`n─────────────────"
 Write-Host "Hardening Privacy" -ForegroundColor Magenta
 Write-Host "─────────────────"
@@ -620,6 +645,7 @@ Protect-Privacy
 Start-Sleep 1
 
 
+# Disable Cortana
 Write-Host "`n─────────────────"
 Write-Host "Disabling Cortana" -ForegroundColor Magenta
 Write-Host "─────────────────"
@@ -627,6 +653,7 @@ Disable-Cortana
 Start-Sleep 1
 
 
+# Remove OneDrive
 Write-Host "`n─────────────────"
 Write-Host "Removing OneDrive" -ForegroundColor Magenta
 Write-Host "─────────────────"
@@ -634,6 +661,7 @@ Uninstall-OneDrive
 Start-Sleep 1
 
 
+# Potentially fix 'DMWAppushservice'
 Write-Host "`n───────────────────────────"
 Write-Host "Checking 'DMWAppushservice'" -ForegroundColor Magenta
 Write-Host "───────────────────────────"
@@ -641,6 +669,7 @@ Fix-DMWService
 Start-Sleep 1
 
 
+# Remove 3D Objects from Explorer submenu
 Write-Host "`n───────────────────"
 Write-Host "Removing 3D Objects" -ForegroundColor Magenta
 Write-Host "───────────────────"
@@ -648,6 +677,7 @@ Remove-3DObjects
 Start-Sleep 1
 
 
+# Beautify, Repair, and Speed Up User Experience
 Write-Host "`n─────────────────────────"
 Write-Host "Improving User Experience" -ForegroundColor Magenta
 Write-Host "─────────────────────────"
@@ -655,6 +685,7 @@ Improve-UserExperience
 Start-Sleep 1
 
 
+# Install Commonly Downloaded Utilities; Update Existing Features
 Write-Host "`n────────────────────────"
 Write-Host "Installing Helpful Tools" -ForegroundColor Magenta
 Write-Host "────────────────────────"
@@ -662,6 +693,7 @@ Get-TheBasics
 Start-Sleep 1
 
 
+# Install WSL2
 if ($WSL2Bool) {
     Write-Host "`n──────────────────────────────────────"
     Write-Host "Installing Windows Subsystem for Linux" -ForegroundColor Magenta
@@ -671,6 +703,7 @@ if ($WSL2Bool) {
 }
 
 
+# Unload the Created "Drive" from the First Step
 Write-Host "`n────────────────────────"
 Write-Host "Unloading the HKCR Drive" -ForegroundColor Magenta
 Write-Host "────────────────────────"
@@ -679,7 +712,10 @@ Write-Host "Done." -ForegroundColor Green
 Start-Sleep 1
 
 
-Write-Host "`n──────────────────────────────────────"
-Write-Host "Uninstalling IE and Rebooting Computer" -ForegroundColor Magenta
-Write-Host "──────────────────────────────────────"
-Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online
+# Remove Internet Explorer and Reboot System
+if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -eq 'Enabled') {
+    Write-Host "`n─────────────────────────"
+    Write-Host "Removing IE and Rebooting" -ForegroundColor Magenta
+    Write-Host "─────────────────────────"
+    Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online
+}
