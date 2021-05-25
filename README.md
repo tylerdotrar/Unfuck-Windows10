@@ -43,7 +43,7 @@ Run with elevated privileges (i.e., Administrator)
 - Verifies / fixes OS integrity. 
 - Uninstalls Internet Exploer (since Edge has an "Open in IE mode" feature).
 
-(OPTIONAL / PROMPTED) Installs some common tools**
+**(OPTIONAL / PROMPTED) Installs some common tools**
 - Chocolatey
 - git
 - vim (`C:\.Tools`)
