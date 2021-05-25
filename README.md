@@ -55,17 +55,17 @@ Run with elevated privileges (i.e., Administrator)
 
 ## Gallery
 
-![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
-`Fresh Windows 10 OS`
-
-
 ![InstallSyntax](https://cdn.discordapp.com/attachments/620986290317426698/846631194303922176/unknown.png)
 `Syntax`
 
 
-![Script](https://cdn.discordapp.com/attachments/620986290317426698/846634822389596180/unknown.png)
-`End of Script`
+![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
+`Start (Fresh Windows 10 Install)`
 
 
 ![FinalResult](https://cdn.discordapp.com/attachments/620986290317426698/846634838298591232/unknown.png)
-`Result (Post-Reboot)`
+`Finish (Post-Reboot)`
+
+
+![Script](https://cdn.discordapp.com/attachments/620986290317426698/846634822389596180/unknown.png)
+`End of Script (Pre-Reboot)`
