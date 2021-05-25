@@ -1,13 +1,11 @@
 # Unfuck-Windows10
-Script meant to debloat Windows 10, enhance privacy, and improve performance &amp; user experience.
+Script meant to debloat Windows 10, enhance privacy, and improve performance &amp; the overall user experience.
 
 ## Disclaimer
 First, I am **NOT** liable for any potential damage or loss of data.  Use and modify this script at your own risk.
 
 Second, thank you to **Sycnex** for the great work on his original Windows 10 debloater project, which heavily inspired this one.
 - https://github.com/Sycnex/Windows10Debloater
-
-
 
 ## Functionality
 
@@ -57,10 +55,6 @@ Second, thank you to **Sycnex** for the great work on his original Windows 10 de
 - Windows Subsystem for Linux (WSL2)
 
 ## Gallery
-
-
-`Syntax`
-
 
 ![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
 `Start (Fresh Windows 10 Install)`
