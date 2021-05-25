@@ -11,10 +11,13 @@ Second, thank you to **Sycnex** for the great work on his original Windows 10 de
 
 ## Functionality
 
-#### Requirements:    
-Run with elevated privileges (i.e., Administrator)
-#### One-Liner Syntax:          
+**Requirements:**
+`Run with elevated privileges (i.e., Administrator)`
+
+**One-Liner Syntax:**
 `iex ((New-Object System.Net.WebClient).DownloadString('https://git.io/JspIT'))`
+
+![InstallSyntax](https://cdn.discordapp.com/attachments/620986290317426698/846631194303922176/unknown.png)
 
 **Uninstalls bloat**
 - Including all the Windows 10 sponsored bloat (games and sponsored shit).
@@ -55,7 +58,7 @@ Run with elevated privileges (i.e., Administrator)
 
 ## Gallery
 
-![InstallSyntax](https://cdn.discordapp.com/attachments/620986290317426698/846631194303922176/unknown.png)
+
 `Syntax`
 
 
