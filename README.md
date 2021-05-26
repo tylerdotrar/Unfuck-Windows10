@@ -29,7 +29,8 @@ Second, thank you to **Sycnex** for the great work on his original Windows 10 de
 **Beautifies user experience**
 - Removes most junk from the taskbar (People, Meet Here, Taskview, Searchbox).
 - Enables dark theme.
-- Removes live tiles from start menu.
+- Removes live tiles from Start Menu.
+- Unpins all items from Start Menu
 - Removes Paint3D stuff from context menu and 3D objects tab from Explorer.
 - Removes 'Microsoft Edge' and 'Microsoft Store' from Taskbar
 
@@ -40,9 +41,10 @@ Second, thank you to **Sycnex** for the great work on his original Windows 10 de
 - Removes Bing from Search.
 - Removes Windows Update bandwidth limitation.
 - Unlocks and enables the hidden 'Ultimate Performance' power plan.
+- Enables 'Enhanced' mode for Windows searching.
 - Cleans up Temp directory.
 - Verifies / fixes OS integrity. 
-- Uninstalls Internet Exploer (since Edge has an "Open in IE mode" feature).
+- Uninstalls Internet Explorer (since Edge has an "Open in IE mode" feature).
 
 **(OPTIONAL / PROMPTED) Installs some common tools**
 - Chocolatey
