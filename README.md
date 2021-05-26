@@ -15,10 +15,10 @@ Run with elevated privileges (i.e., Administrator)
 
 **One-Liner Syntax:**
 ```powershell
-iex ([System.Net.WebClient].new().DownloadString('https://git.io/JspIT'))
+iex ([System.Net.WebClient]::new().DownloadString('https://git.io/JspIT'))
 ```
 
-![InstallSyntax](https://cdn.discordapp.com/attachments/620986290317426698/846631194303922176/unknown.png)
+![Syntax](https://cdn.discordapp.com/attachments/620986290317426698/847198765147357184/unknown.png)
 
 ## Functionality
 
@@ -39,14 +39,16 @@ iex ([System.Net.WebClient].new().DownloadString('https://git.io/JspIT'))
 
 **Enhances Overall User Experience**
 ```
-- Removes most junk from the taskbar (e.g., People, Meet Here, Taskview, Searchbar, 'Edge' and 'Microsoft Store').
+- Removes most junk from the taskbar (e.g., People, Meet Here, Taskview, Searchbar).
+- Unpin 'Microsoft Edge' and 'Microsoft Store' from Taskbar.
 - Removes live tiles and unpins all items from the Start Menu.
 - Removes Bing suggestions from Search.
 - Sets Windows Search to use 'Enhanced' mode instead of 'Classic'.
 - Unlocks and enables the hidden 'Ultimate Performance' power plan.
 - Removes the Windows Update bandwidth limitation.
 - Enables 'Show File Extensions'.
-- Removes Paint3D context menu options and 3D objects tab from Explorer.
+- Removes Paint3D context menu options.
+- Remove 3D Objects tab from Explorer submenu.
 - Enables dark theme.
 - Cleans up Temp directory.
 - Verifies / fixes OS integrity.
@@ -66,7 +68,7 @@ iex ([System.Net.WebClient].new().DownloadString('https://git.io/JspIT'))
   --> vim        (C:\.Tools\<name>)
 ```
 
-**(OPTIONAL) Installs Windows Subsystem for Linux (WSL2)**
+**(OPTIONAL) Installs WSL2**
 ```
 - Enables the 'Microsoft-Windows-Subsystem-Linux' dependency.
 - Enables the 'VirtualMachinePlatform' dependency.
@@ -80,13 +82,23 @@ iex ([System.Net.WebClient].new().DownloadString('https://git.io/JspIT'))
 
 ![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
 ```
-Start (Fresh Windows 10 Install)
+Fresh Windows 10 Install
 ```
 
 
 ![FinalResult](https://cdn.discordapp.com/attachments/620986290317426698/846634838298591232/unknown.png)
-`Finish (Post-Reboot)`
+```
+Unfucked Windows 10
+```
 
 
-![Script](https://cdn.discordapp.com/attachments/620986290317426698/846634822389596180/unknown.png)
-`End of Script (Pre-Reboot)`
+![Verbose1](https://cdn.discordapp.com/attachments/620986290317426698/847202229776941056/unknown.png)
+```
+(1) Example Verbosity
+```
+
+
+![Verbose2](https://cdn.discordapp.com/attachments/620986290317426698/847202243886579722/unknown.png)
+```
+(2) Example Verbosity
+```
