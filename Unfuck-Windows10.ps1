@@ -1,6 +1,6 @@
 ﻿<#
 Unfuck-Windows10.ps1 
-Version 1.2.4
+Version 1.3.7
 This script was tested on Windows 10 Pro (version 20H2) -- it has not been tested on Windows 10 Home.
 
 Purpose:         Debloat Windows 10, improve performance, and enhance user privacy & experience.
@@ -382,48 +382,166 @@ function Uninstall-OneDrive {
     Write-Host "Waiting for Explorer to reload..." -ForegroundColor Yellow
     Start-Sleep -Seconds 15
 }
-function Remove-3DObjects {
-
-    # Removes 3D Objects from the 'My Computer' submenu in explorer
-    Write-Host "Removing 3D Objects from explorer 'My Computer' submenu..." -ForegroundColor Yellow
-    $Objects32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
-    $Objects64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
-
-    if (Test-Path $Objects32) { Remove-Item $Objects32 -Recurse }
-    if (Test-Path $Objects64) { Remove-Item $Objects64 -Recurse }
-    Write-Host "Done." -ForegroundColor Green
-}
-function Fix-DMWService {
-
-    # Fixes the DMW service if it happens to be disabled or stopped.
-    Write-Host "Potentially fixing the Device Management WAP Push message Routing Service..." -ForegroundColor Yellow
-
-    if (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
-        Set-Service -Name dmwappushservice -StartupType Automatic
-    }
-
-    if (Get-Service -Name dmwappushservice | Where-Object {$_.Status -eq "Stopped"}) {
-        Start-Service -Name dmwappushservice
-    }
-    Write-Host "Done." -ForegroundColor Green
-}
 function Improve-UserExperience {
     
-    # Remove Bing from search
-    Write-Host "Removing Bing suggestions from the search..." -ForegroundColor Yellow
-    $BingSearch = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer'
-    if (!(Test-Path $BingSearch)) { New-Item $BingSearch -Force | Out-Null }
-    Set-ItemProperty -Path $BingSearch -Name "DisableSearchBoxSuggestions" -Value 1
-    Write-Host "Done." -ForegroundColor Green
+    function Enhance-Explorer {
+
+        # Show File Extensions in Explorer
+        Write-Host "Enabling file name extensions..." -ForegroundColor Yellow
+        $ExplorerPath = "Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+        Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
+        Write-Host "Done." -ForegroundColor Green
+
+        # Removes 3D Objects from the 'My Computer' submenu in explorer
+        Write-Host "Removing 3D Objects from 'My Computer' submenu..." -ForegroundColor Yellow
+        $Objects32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
+        $Objects64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
+
+        if (Test-Path $Objects32) { Remove-Item $Objects32 -Recurse }
+        if (Test-Path $Objects64) { Remove-Item $Objects64 -Recurse }
+        Write-Host "Done." -ForegroundColor Green
+    }
+    function Enhance-Search {
+
+        # Remove Bing from search
+        Write-Host "Removing Bing suggestions..." -ForegroundColor Yellow
+        $BingSearch = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer'
+        if (!(Test-Path $BingSearch)) { New-Item $BingSearch -Force | Out-Null }
+        Set-ItemProperty -Path $BingSearch -Name "DisableSearchBoxSuggestions" -Value 1
+        Write-Host "Done." -ForegroundColor Green
 
 
-    # Remove Windows bandwidth limits
-    Write-Host "Removing the Windows bandwidth limitation..." -ForegroundColor Yellow
-    $Bandwidth = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Psched'
-    if (!(Test-Path $Bandwidth)) { New-Item $Bandwidth -Force | Out-Null }
-    Set-ItemProperty -Path $Bandwidth -Name "NonBestEffortLimit" -Value 0
-    Write-Host "Done." -ForegroundColor Green
-    
+        # Set Windows Search to use 'Enhanced' Mode; Creates a Scheduled Task that runs as SYSTEM to change Registry Key and then deletes itself.
+        Write-Host "Enabling 'Enhanced' mode..." -ForegroundColor Yellow
+        $EnhancedSearch = "Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex' -Name 'EnableFindMyFiles' -Value 1"
+
+        $PS = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-command `"$EnhancedSearch`""
+        $Time = New-ScheduledTaskTrigger -At (Get-Date).AddSeconds(5) -Once
+        $Time.EndBoundary = (Get-Date).AddSeconds(15).ToString('s')
+        $Remove = New-ScheduledTaskSettingsSet -DeleteExpiredTaskAfter 00:00:01
+        Register-ScheduledTask -TaskName 'Enhance Search' -Action $PS -Trigger $Time -Settings $Remove -User SYSTEM -Force | Out-Null
+        Write-Host "Done." -ForegroundColor Green
+    }
+    function Enhance-StartMenu {
+
+        # Disable Live Tiles
+        Write-Host "Disabling 'Live Tiles'..." -ForegroundColor Yellow
+        $LiveTiles = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications'
+        if (!(Test-Path $LiveTiles)) { New-Item $LiveTiles -Force | Out-Null }
+        Set-ItemProperty -Path $LiveTiles -Name 'NoTileApplicationNotification' -Value 1
+        Write-Host "Done." -ForegroundColor Green
+
+
+        ### Unpin all Items from Start Menu
+        Write-Host "Removing remaining tiles..." -ForegroundColor Yellow
+
+        $LayoutFile="C:\Windows\StartMenuLayout.xml"
+        $START_MENU_LAYOUT = @"
+<LayoutModificationTemplate xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" Version="1" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification">
+    <LayoutOptions StartTileGroupCellWidth="6" />
+    <DefaultLayoutOverride>
+        <StartLayoutCollection>
+            <defaultlayout:StartLayout GroupCellWidth="6" />
+        </StartLayoutCollection>
+    </DefaultLayoutOverride>
+</LayoutModificationTemplate>
+"@
+
+        # Create new empty layout file
+        if (Test-Path $LayoutFile) { Remove-Item $LayoutFile }
+        $START_MENU_LAYOUT | Out-File $layoutFile -Encoding ASCII
+
+        # Assign the start layout and force it to apply with "LockedStartLayout" at both the machine and user level
+        $regAliases = @("HKLM", "HKCU")
+        foreach ($regAlias in $regAliases){
+            $basePath = $regAlias + ":\SOFTWARE\Policies\Microsoft\Windows"
+            $keyPath = $basePath + "\Explorer" 
+            if (!(Test-Path -Path $keyPath)) { New-Item -Path $basePath -Name "Explorer" | Out-Null }
+            Set-ItemProperty -Path $keyPath -Name "LockedStartLayout" -Value 1
+            Set-ItemProperty -Path $keyPath -Name "StartLayoutFile" -Value $LayoutFile
+        }
+
+        #Restart Explorer, open the start menu (necessary to load the new layout), and give it a few seconds to process
+        Stop-Process -Name explorer ; Sleep 5
+        $wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('^{ESCAPE}') ; Sleep 5
+
+        #Enable the ability to pin items again by disabling "LockedStartLayout"
+        foreach ($regAlias in $regAliases){
+            $basePath = $regAlias + ":\SOFTWARE\Policies\Microsoft\Windows"
+            $keyPath = $basePath + "\Explorer" 
+            Set-ItemProperty -Path $keyPath -Name "LockedStartLayout" -Value 0
+        }
+
+        #Restart Explorer and delete the layout file
+        Stop-Process -name explorer
+        Remove-Item $layoutFile
+
+        Write-Host "Done." -ForegroundColor Green
+    }
+    function Enhance-Taskbar {
+
+        # Remove Microsoft Edge and Microsoft Store from Taskbar
+        Write-Host "Removing 'Microsoft Store' and 'Microsoft Edge'..." -ForegroundColor Yellow
+        $Items = @('Microsoft Store', 'Microsoft Edge')
+        $ObjectList = (New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items()
+        foreach ($Item in $Items) { 
+            $ObjectList | ? { $_.Name -eq $Item } | % {$_.Verbs()} | ? { $_.Name.Replace('&','') -eq 'Unpin from Taskbar' } | % { $_.DoIt() }
+        }
+        $ObjectList = $NULL
+        Write-Host "Done." -ForegroundColor Green
+
+        # Remove 'People' icon from Taskbar
+        Write-Host "Removing 'People'..." -ForegroundColor Yellow
+        $People = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
+        if (!(Test-Path $People)) { New-Item $People -Force | Out-Null }
+        Set-ItemProperty -Path $People -Name PeopleBand -Value 0
+        Write-Host "Done." -ForegroundColor Green
+
+        # Remove 'Meet Now' from the Taskbar
+        Write-Host "Removing 'Meet Now'..." -ForegroundColor Yellow
+        $MeetNow = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+        if (!(Test-Path $MeetNow)) { New-Item $MeetNow -Force | Out-Null }
+        Set-ItemProperty -Path $MeetNow -Name "HideSCAMeetNow" -Value 1
+        Write-Host "Done." -ForegroundColor Green
+
+        # Remove 'TaskView' from the Taskbar
+        Write-Host "Removing 'Task View'..." -ForegroundColor Yellow
+        $TaskView = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+        if (!(Test-Path $TaskView)) { New-Item $TaskView -Force | Out-Null }
+        Set-ItemProperty -Path $TaskView -Name "ShowTaskViewButton" -Value 0
+        Write-Host "Done." -ForegroundColor Green
+
+        # Hide Search Box on Taskbar
+        Write-Host "Hiding the Search Box..." -ForegroundColor Yellow
+        $SearchBox = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
+        if (!(Test-Path $SearchBox)) { New-Item $SearchBox -Force | Out-Null }
+        Set-ItemProperty -Path $SearchBox -Name "SearchboxTaskbarMode" -Value 0
+        Write-Host "Done." -ForegroundColor Green
+    }
+
+    # Improve File Explorer
+    Write-Host "Explorer Enhancement:" -ForegroundColor Cyan
+    Enhance-Explorer
+    Write-Host "Complete.`n" -ForegroundColor Cyan
+
+
+    # Remove all bloat from Taskbar
+    Write-Host "Taskbar Enhancement:" -ForegroundColor Cyan
+    Enhance-Taskbar
+    Write-Host "Complete.`n" -ForegroundColor Cyan
+
+ 
+    # Remove all bloat from StartMenu
+    Write-Host "StartMenu Enhancement:" -ForegroundColor Cyan
+    Enhance-StartMenu
+    Write-Host "Complete.`n" -ForegroundColor Cyan
+
+
+    # Improve Search
+    Write-Host "Search Enhancement:" -ForegroundColor Cyan
+    Enhance-Search
+    Write-Host "Complete.`n" -ForegroundColor Cyan
+
 
     # Unlock and Enable 'Ultimate Performance' Power Plan
     Write-Host "Unlocking and enabling the 'Ultimate Performance' power plan..." -ForegroundColor Yellow
@@ -441,72 +559,22 @@ function Improve-UserExperience {
     Write-Host "Done." -ForegroundColor Green
 
 
-    # Show File Extensions in Explorer
-    Write-Host "Setting Explorer to display file extensions..." -ForegroundColor Yellow
-    $ExplorerPath = "Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
+    # Remove Windows Update bandwidth limits
+    Write-Host "Removing the Windows Update bandwidth limitation..." -ForegroundColor Yellow
+    $Bandwidth = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Psched'
+    if (!(Test-Path $Bandwidth)) { New-Item $Bandwidth -Force | Out-Null }
+    Set-ItemProperty -Path $Bandwidth -Name "NonBestEffortLimit" -Value 0
     Write-Host "Done." -ForegroundColor Green
 
 
-    ### CURRENTLY BROKEN DUE TO REGISTRY PERMISSIONS ###
-    <#
-    # Set Windows Search to use 'Enhanced' Mode
-    Write-Host "Enabling 'Enhanced' mode in Windows Search..." -ForegroundColor Yellow
-    $SearchMode = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex'
-    Set-ExecutionPolicy Bypass -Scope Process -Force; Set-ItemProperty -Path $SearchMode -Name 'EnableFindMyFiles' -Value 1
-    Write-Host "Done." -ForegroundColor Green
-    #>
-
-    # Remove items from Taskbar
-    
-
-    # Disable Live Tiles
-    Write-Host "Disabling Live Tiles in the Start Menu..." -ForegroundColor Yellow
-    $LiveTiles = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications'
-    if (!(Test-Path $LiveTiles)) { New-Item $LiveTiles -Force | Out-Null }
-    Set-ItemProperty -Path $LiveTiles -Name 'NoTileApplicationNotification' -Value 1
-    Write-Host "Done." -ForegroundColor Green
-
-
-    ### Taskbar Overhaul
-
-    # Remove Microsoft Edge and Microsoft Store from Taskbar
-    Write-Host "Removing 'Microsoft Store' and 'Microsoft Edge' from the Taskbar..."
-    $ObjectList = (New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items()
-
-    $Items = @('Microsoft Store', 'Microsoft Edge')
-    foreach ($Item in $Items) { 
-        $ObjectList | ? { $_.Name -eq $Item } | % {$_.Verbs()} | ? { $_.Name.Replace('&','') -eq 'Unpin from Taskbar' } | % { $_.DoIt() }
+    # Fixes the DMW service if it happens to be disabled or stopped.
+    Write-Host "Potentially fixing the Device Management WAP Push message Routing Service..." -ForegroundColor Yellow
+    if (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
+        Set-Service -Name dmwappushservice -StartupType Automatic
     }
-    $ObjectList = $NULL
-    Write-Host "Done." -ForegroundColor Green
-
-    # Remove 'People' icon from Taskbar
-    Write-Host "Removing 'People' from the Taskbar..." -ForegroundColor Yellow
-    $People = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
-    if (!(Test-Path $People)) { New-Item $People -Force | Out-Null }
-    Set-ItemProperty -Path $People -Name PeopleBand -Value 0
-    Write-Host "Done." -ForegroundColor Green
-
-    # Remove 'Meet Now' from the Taskbar
-    Write-Host "Removing 'Meet Now' from the Taskbar..." -ForegroundColor Yellow
-    $MeetNow = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
-    if (!(Test-Path $MeetNow)) { New-Item $MeetNow -Force | Out-Null }
-    Set-ItemProperty -Path $MeetNow -Name "HideSCAMeetNow" -Value 1
-    Write-Host "Done." -ForegroundColor Green
-
-    # Remove 'TaskView' from the Taskbar
-    Write-Host "Removing 'Task View' from the Taskbar..." -ForegroundColor Yellow
-    $TaskView = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
-    if (!(Test-Path $TaskView)) { New-Item $TaskView -Force | Out-Null }
-    Set-ItemProperty -Path $TaskView -Name "ShowTaskViewButton" -Value 0
-    Write-Host "Done." -ForegroundColor Green
-
-    # Hide Search Box on Taskbar
-    Write-Host "Hiding Search Box on the Taskbar..." -ForegroundColor Yellow
-    $SearchBox = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
-    if (!(Test-Path $SearchBox)) { New-Item $SearchBox -Force | Out-Null }
-    Set-ItemProperty -Path $SearchBox -Name "SearchboxTaskbarMode" -Value 0
+    if (Get-Service -Name dmwappushservice | Where-Object {$_.Status -eq "Stopped"}) {
+        Start-Service -Name dmwappushservice
+    }
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -661,22 +729,6 @@ Uninstall-OneDrive
 Start-Sleep 1
 
 
-# Potentially fix 'DMWAppushservice'
-Write-Host "`n───────────────────────────"
-Write-Host "Checking 'DMWAppushservice'" -ForegroundColor Magenta
-Write-Host "───────────────────────────"
-Fix-DMWService
-Start-Sleep 1
-
-
-# Remove 3D Objects from Explorer submenu
-Write-Host "`n───────────────────"
-Write-Host "Removing 3D Objects" -ForegroundColor Magenta
-Write-Host "───────────────────"
-Remove-3DObjects
-Start-Sleep 1
-
-
 # Beautify, Repair, and Speed Up User Experience
 Write-Host "`n─────────────────────────"
 Write-Host "Improving User Experience" -ForegroundColor Magenta
@@ -712,10 +764,16 @@ Write-Host "Done." -ForegroundColor Green
 Start-Sleep 1
 
 
-# Remove Internet Explorer and Reboot System
+# Remove Internet Explorer and/or Reboot System
 if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -eq 'Enabled') {
     Write-Host "`n─────────────────────────"
     Write-Host "Removing IE and Rebooting" -ForegroundColor Magenta
     Write-Host "─────────────────────────"
     Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online
+}
+else {
+    Write-Host "`n─────────"
+    Write-Host "Rebooting" -ForegroundColor Magenta
+    Write-Host "─────────"
+    shutdown /r /t 5
 }
