@@ -4,62 +4,84 @@ Script meant to debloat Windows 10, enhance privacy, and improve performance &am
 ## Disclaimer
 First, I am **NOT** liable for any potential damage or loss of data.  Use and modify this script at your own risk.
 
-Second, thank you to **Sycnex** for the great work on his original Windows 10 debloater project, which heavily inspired this one.
-- https://github.com/Sycnex/Windows10Debloater
+Second, thank you to `Sycnex` for the great work on his original [Windows 10 Debloater](https://github.com/Sycnex/Windows10Debloater) project, which heavily inspired this one.
 
-## Functionality
+## TL;DR
 
 **Requirements:**
-`Run with elevated privileges (i.e., Administrator)`
+```
+Run with elevated privileges (i.e., Administrator)
+```
 
 **One-Liner Syntax:**
-`iex ((New-Object System.Net.WebClient).DownloadString('https://git.io/JspIT'))`
+```powershell
+iex ([System.Net.WebClient].new().DownloadString('https://git.io/JspIT'))
+```
 
 ![InstallSyntax](https://cdn.discordapp.com/attachments/620986290317426698/846631194303922176/unknown.png)
 
-**Uninstalls bloat**
-- Including all the Windows 10 sponsored bloat (games and sponsored shit).
-- Includes Windows 10 junk no one uses -- like the Xbox apps, Groove Music, Get Help, News, Feedback, etc.
-- Even more integrated stuff like Cortana and OneDrive.
+## Functionality
 
-**Improves privacy**
-- Disables Feedback Experience, data collection, suggested content, location tracking, etc.
-- Disables specific scheduled task and services, including diagnostics tracking.
+**Uninstalls Windows 10 Bloat**
+```
+- Windows 10 sponsored bloat games and sponsored apps (e.g., CandyCrush).
+- Windows 10 junk no one uses (e.g., Xbox apps, Groove Music, Mixed Reality Portal, Feedback Hub).
+- Even more integrated and annoying stuff like 'OneDrive'.
+```
 
-**Beautifies user experience**
-- Removes most junk from the taskbar (People, Meet Here, Taskview, Searchbox).
-- Enables dark theme.
-- Removes live tiles from Start Menu.
-- Unpins all items from Start Menu
-- Removes Paint3D stuff from context menu and 3D objects tab from Explorer.
-- Removes 'Microsoft Edge' and 'Microsoft Store' from Taskbar
+**Improves User Privacy**
+```
+- Disables Feedback Experience, anonymous data collection, suggested content, location tracking, etc.
+- Disables specific scheduled tasks and services, including diagnostics tracking and CloudStore.
+- Disables Cortana and included Cortana data collection.
+- Disables background application access.
+```
 
-**QOL improvements and update existing utiilities**
-- Enables .NET 3.5 package.
-- Enables 'Show File Extensions'.
-- Updates 'Get-Help' (assuming this is a fresh install of Win10).
-- Removes Bing from Search.
-- Removes Windows Update bandwidth limitation.
+**Enhances Overall User Experience**
+```
+- Removes most junk from the taskbar (e.g., People, Meet Here, Taskview, Searchbar, 'Edge' and 'Microsoft Store').
+- Removes live tiles and unpins all items from the Start Menu.
+- Removes Bing suggestions from Search.
+- Sets Windows Search to use 'Enhanced' mode instead of 'Classic'.
 - Unlocks and enables the hidden 'Ultimate Performance' power plan.
-- Enables 'Enhanced' mode for Windows searching.
+- Removes the Windows Update bandwidth limitation.
+- Enables 'Show File Extensions'.
+- Removes Paint3D context menu options and 3D objects tab from Explorer.
+- Enables dark theme.
 - Cleans up Temp directory.
-- Verifies / fixes OS integrity. 
+- Verifies / fixes OS integrity.
 - Uninstalls Internet Explorer (since Edge has an "Open in IE mode" feature).
+```
 
-**(OPTIONAL / PROMPTED) Installs some common tools**
-- Chocolatey
-- git
-- vim (`C:\.Tools`)
-- Notepad++ (`C:\.Tools`)
-- 7-Zip (`C:\.Tools`)
-- PowerShell Core
-- Windows Terminal
-- Windows Subsystem for Linux (WSL2)
+**(OPTIONAL) Downloads & Updates Useful Utiilities**
+```
+- Enables .NET Framework 3.5 package.
+- Updates the 'Get-Help' cmdlet (assuming you're using a fresh install of Windows 10).
+- Downloads Chocolatey
+  --> git
+  --> PowerShell Core
+  --> Windows Terminal
+  --> Notepad++  (C:\.Tools\<name>)
+  --> 7-Zip      (C:\.Tools\<name>)
+  --> vim        (C:\.Tools\<name>)
+```
+
+**(OPTIONAL) Installs Windows Subsystem for Linux (WSL2)**
+```
+- Enables the 'Microsoft-Windows-Subsystem-Linux' dependency.
+- Enables the 'VirtualMachinePlatform' dependency.
+- Downloads the WSL2 kernel package.
+- Installs the WSL2 package and sets WSL default version to 2.
+    OR 
+- Creates a small script in the 'RunOnce' registry key to finish install post-reboot.
+```
 
 ## Gallery
 
 ![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
-`Start (Fresh Windows 10 Install)`
+```
+Start (Fresh Windows 10 Install)
+```
 
 
 ![FinalResult](https://cdn.discordapp.com/attachments/620986290317426698/846634838298591232/unknown.png)
