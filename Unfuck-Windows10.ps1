@@ -1,6 +1,6 @@
 ﻿<#
 Unfuck-Windows10.ps1 
-Version 1.4.0
+Version 1.4.3
 This script was tested on Windows 10 Pro (version 20H2) -- it has not been tested on Windows 10 Home.
 
 Purpose:         Debloat Windows 10, improve performance, and enhance user privacy & experience.
@@ -13,20 +13,98 @@ https://git.io/JspIT
 #>
 
 
-# Prompt for Choco (and tools) Installation
-Write-Host "`nInstall Chocolatey (and common tools)?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt1 = Read-Host
-if (($Prompt1 -eq 'y') -or ($Prompt1 -eq 'yes')) { $ToolBool = $TRUE }
-else { $ToolBool = $FALSE }
+# Exit if session doesn't have elevated privileges
+$User = [Security.Principal.WindowsIdentity]::GetCurrent();
+$isAdmin = (New-Object Security.Principal.WindowsPrincipal $User).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+if (!$isAdmin) { return (Write-Host 'This script requires elevated privileges.' -ForegroundColor Red) }
 
 
-# Prompt for WSL2 Installation
-Write-Host "`nInstall Windows Subsystem for Linux?`n[yes/no]: " -NoNewLine -ForegroundColor Yellow; $Prompt2 = Read-Host
-if (($Prompt2 -eq 'y') -or ($Prompt2 -eq 'yes')) { $WSL2Bool = $TRUE }
-else { $WSL2Bool = $FALSE }
+function Remove-WindowsBloat {
+
+    function Uninstall-OneDrive {
+
+        # Move pre-existing user files and data before uninstalling 'OneDrive'
+        Write-Host "Checking for files and folders in 'OneDrive'..." -ForegroundColor Yellow
+        Start-Sleep 1
+    
+        if (Test-Path "$env:USERPROFILE\OneDrive\*") {
+            Write-Host "Content found. Moving to 'OneDriveBackupFiles' on your desktop prior to 'OneDrive' removal."
+            Start-Sleep 1
+            
+            if (!(Test-Path "$env:USERPROFILE\Desktop\OneDriveBackupFiles")) { 
+                New-item -Path "$env:USERPROFILE\Desktop" -Name "OneDriveBackupFiles"-ItemType Directory -Force
+            }
+    
+            Start-Sleep 1
+            Move-Item -Path "$env:USERPROFILE\OneDrive\*" -Destination "$env:USERPROFILE\Desktop\OneDriveBackupFiles" -Force
+            Start-Sleep 1
+            Write-Host "Complete. Proceeding with the removal of OneDrive."
+            Start-Sleep 1
+        }
+        else {
+            Write-Host "No content found. Proceeding with removal of OneDrive."
+            Start-Sleep 1
+            
+            # Enabling the Group Policy 'Prevent the usage of OneDrive for File Storage'
+            $OneDriveKey = 'HKLM:Software\Policies\Microsoft\Windows\OneDrive'
+            if (!(Test-Path $OneDriveKey)) { New-Item $OneDriveKey -Force | Out-Null }
+            Set-ItemProperty $OneDriveKey -Name OneDrive -Value DisableFileSyncNGSC
+        }
+        Write-Host "Done." -ForegroundColor Green
+        
+    
+        # Executing uninstaller
+        Write-Host "Executing 'OneDrive' uninstaller..." -ForegroundColor Yellow
+        Get-Process OneDrive | Stop-Process -Force
+        Get-Process explorer | Stop-Process -Force
+    
+        $OneDrive64bit = "$env:SYSTEMROOT\System32\OneDriveSetup.exe"
+        $OneDrive32bit = "$env:SYSTEMROOT\SysWOW64\OneDriveSetup.exe"
+    
+        if (Test-Path $OneDrive64bit) { & $OneDrive64bit /uninstall }
+        if (Test-Path $OneDrive32bit) { & $OneDrive32bit /uninstall }
+        Write-Host "Done." -ForegroundColor Green
+    
+    
+        # Remove from Explorer sidebar
+        Write-Host "Removing 'OneDrive' from Explorer sidebar..." -ForegroundColor Yellow
+        New-Item "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Force | Out-Null
+        Set-ItemProperty -Path "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Name "System.IsPinnedToNameSpaceTree" -Value 0
+        New-Item "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Force | Out-Null
+        Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Name "System.IsPinnedToNameSpaceTree" -Value 0
+        Write-Host "Done." -ForegroundColor Green
+    
+    
+        # Disable run option for New Users
+        Write-Host "Removing run option for new users..." -ForegroundColor Yellow
+        reg load "hku\Default" "C:\Users\Default\NTUSER.DAT"
+        reg delete "HKEY_USERS\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "OneDriveSetup" /f
+        reg unload "hku\Default"
+        Write-Host "Done." -ForegroundColor Green
+    
+    
+        # Cleaning up
+        Write-Host "Removing 'OneDrive' leftovers..." -ForegroundColor Yellow
+        Remove-Item -Recurse "$env:LOCALAPPDATA\Microsoft\OneDrive" -Force -ErrorAction SilentlyContinue
+        Remove-Item -Recurse "$env:PROGRAMDATA\Microsoft OneDrive" -Force -ErrorAction SilentlyContinue
+        Remove-Item -Recurse "$env:SYSTEMDRIVE\OneDriveTemp" -Force -ErrorAction SilentlyContinue
+        Write-Host "Done." -ForegroundColor Green
+    
+        Write-Host "Removing StartMenu junk entry..." -ForegroundColor Yellow
+        Remove-Item "$env:USERPROFILE\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk" -Force -ErrorAction SilentlyContinue
+        Write-Host "Done." -ForegroundColor Green
+    
+        Write-Host "Restarting explorer.exe..." -ForegroundColor Yellow
+        Start-Process "explorer.exe"
+        Write-Host "Done." -ForegroundColor Green
+    
+        Write-Host "Waiting for Explorer to reload..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 15
+        Write-Host "Done." -ForegroundColor Green
+    }
 
 
-function Debloat-Windows {
-
+    # Bloat apps and packages (Configure as Desired)
     $Bloatware = @(
 
         # Windows 10 AppX Apps
@@ -96,11 +174,19 @@ function Debloat-Windows {
         "*Dolby*"
     )
 
+    # Remove bloat apps and packages
     Write-Host "Attemping to remove bloatware..." -ForegroundColor Yellow
     foreach ($Bloat in $Bloatware) {
-        Get-AppxPackage -AllUsers -Name $Bloat| Remove-AppxPackage
-        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $Bloat | Remove-AppxProvisionedPackage -Online -AllUsers | Out-Null
-        Write-Output "- $Bloat"
+
+        $Package1 = (Get-AppxPackage -AllUsers -Name $Bloat)
+        $Package2 = (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $Bloat)
+
+        if ($Package1 -or $Package2) {
+            $Package1 | % { Remove-AppxPackage $_ }
+            $Package2 | % { Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $_.PackageName | Out-Null }
+            Write-Host "- $Bloat"
+        }
+        else { Write-Host "- $Bloat" -ForegroundColor Red }
     }
     Write-Host "Done." -ForegroundColor Green
 
@@ -111,9 +197,9 @@ function Debloat-Windows {
         Write-Host "-" $_.DisplayName
     }
     Write-Host "Done." -ForegroundColor Green
-}
-function Remove-Keys {
-            
+
+
+    # Bloat Registry Keys
     $Keys = @(
             
         # Remove Background Tasks
@@ -147,55 +233,99 @@ function Remove-Keys {
         "HKCR:\Extensions\ContractId\Windows.ShareTarget\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
     )
         
-
-    # Remove Registry Keys
+    # Remove Registry Keys if they Exist
     Write-Host "Attempting to remove keys from the Registry..." -ForegroundColor Yellow
-    foreach ($Key in $Keys) { Remove-Item $Key -Recurse 2>$NULL ; "- $Key" }
+    foreach ($Key in $Keys) { 
+        if (Test-Path $Key) { Remove-Item $Key -Recurse -Force 2>$NULL ; "- $Key" }
+        else { Write-Host "- $Key" -ForegroundColor Red }
+    }
     Write-Host "Done." -ForegroundColor Green
+
+
+    # Uninstall 'OneDrive'
+    Write-Host "`nRemoving 'OneDrive':" -ForegroundColor Cyan
+    Uninstall-OneDrive
+    Write-Host "Complete." -ForegroundColor Cyan
 }
 function Protect-Privacy {
     
+    function Disable-Cortana {
+
+        # Disable Cortana data collection
+        Write-Host "Stopping Cortana data collection..." -ForegroundColor Yellow
+        $Cortana1 = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Personalization\Settings'
+        $Cortana2 = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\InputPersonalization'
+        $Cortana3 = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore'
+        if (!(Test-Path $Cortana1)) { New-Item $Cortana1 | Out-Null }
+        Set-ItemProperty -Path $Cortana1 -Name AcceptedPrivacyPolicy -Value 0
+    
+        if (!(Test-Path $Cortana2)) { New-Item $Cortana2 | Out-Null }
+        Set-ItemProperty -Path $Cortana2 -Name RestrictImplicitTextCollection -Value 1 
+        Set-ItemProperty -Path $Cortana2 -Name RestrictImplicitInkCollection -Value 1
+    
+        if (!(Test-Path $Cortana3)) { New-Item $Cortana3 | Out-Null }
+        Set-ItemProperty -Path $Cortana3 -Name HarvestContacts -Value 0
+        Write-Host "Done." -ForegroundColor Green
+        
+        # Stops Cortana from being used as part of your Windows Search Function
+        Write-Host "Stopping Cortana from being used as part of Windows Search..." -ForegroundColor Yellow
+        $Search = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
+        if (!(Test-Path $Search)) { New-Item $Search -Force | Out-Null }
+        Set-ItemProperty -Path $Search -Name "AllowCortana" -Value 0 
+    
+        Write-Host "Done." -ForegroundColor Green
+    }
+
+
     # Disables Windows Feedback Experience
     Write-Host "Disabling 'Windows Feedback Experience'..." -ForegroundColor Yellow
-    $Advertising = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo"
+    $Advertising = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo'
     if (!(Test-Path $Advertising)) { New-Item $Advertising -Force | Out-Null }
     Set-ItemProperty -Path $Advertising -Name Enabled -Value 0 
     Write-Host "Done." -ForegroundColor Green
 
 
     # Stops the Windows Feedback Experience from sending anonymous data
-    Write-Host "Stopping the Windows Feedback Experience program from sending anonymous data..." -ForegroundColor Yellow
-    $Period = "HKCU:\Software\Microsoft\Siuf\Rules"
+    Write-Host "Stopping Windows Feedback Experience program from sending anonymous data..." -ForegroundColor Yellow
+    $Period = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Siuf\Rules'
     if (!(Test-Path $Period)) { New-Item $Period -Force | Out-Null }
     Set-ItemProperty -Path $Period -Name PeriodInNanoSeconds -Value 0
     Write-Host "Done." -ForegroundColor Green
 
 
     # Prevents bloatware applications from returning and removes Start Menu suggestions               
-    Write-Host "Adding Registry key to prevent bloatware apps from returning..." -ForegroundColor Yellow
-    $registryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent"
-    $registryOEM = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Write-Host "Adding egistry key to prevent bloatware apps from returning..." -ForegroundColor Yellow
+    $registryPath = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent'
+    $registryOEM = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+
     if (!(Test-Path $registryPath)) { New-Item $registryPath -Force | Out-Null }
-    Set-ItemProperty $registryPath DisableWindowsConsumerFeatures -Value 1 
+    Set-ItemProperty -Path $registryPath -Name DisableWindowsConsumerFeatures -Value 1 
+
     if (!(Test-Path $registryOEM)) { New-Item $registryOEM -Force | Out-Null }
-    Set-ItemProperty $registryOEM  ContentDeliveryAllowed -Value 0 
-    Set-ItemProperty $registryOEM  OemPreInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  PreInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  PreInstalledAppsEverEnabled -Value 0 
-    Set-ItemProperty $registryOEM  SilentInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  SystemPaneSuggestionsEnabled -Value 0
+    Set-ItemProperty -Path $registryOEM  -Name ContentDeliveryAllowed -Value 0 
+    Set-ItemProperty -Path $registryOEM  -Name OemPreInstalledAppsEnabled -Value 0 
+    Set-ItemProperty -Path $registryOEM  -Name PreInstalledAppsEnabled -Value 0 
+    Set-ItemProperty -Path $registryOEM  -Name PreInstalledAppsEverEnabled -Value 0 
+    Set-ItemProperty -Path $registryOEM  -Name SilentInstalledAppsEnabled -Value 0 
+    Set-ItemProperty -Path $registryOEM  -Name SystemPaneSuggestionsEnabled -Value 0
     Write-Host "Done." -ForegroundColor Green
 
 
-    # Turns off Data Collection via the AllowTelemtry key by changing it to 0
+    # Turns off Data Collection via the 'AllowTelemtry key' by changing it to 0
     Write-Host "Turning off Data Collection..." -ForegroundColor Yellow
-    $DataCollection1 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection"
-    $DataCollection2 = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
-    $DataCollection3 = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection"    
+    $DataCollection1 = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection'
+    $DataCollection2 = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+    $DataCollection3 = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection' 
     if (Test-Path $DataCollection1) { Set-ItemProperty -Path $DataCollection1 -Name AllowTelemetry -Value 0 }
     if (Test-Path $DataCollection2) { Set-ItemProperty -Path $DataCollection2 -Name AllowTelemetry -Value 0 }
     if (Test-Path $DataCollection3) { Set-ItemProperty -Path $DataCollection3 -Name AllowTelemetry -Value 0 }
     Write-Host "Done." -ForegroundColor Green
+
+
+    # Disable 'Cortana'
+    Write-Host "`nDisabling 'Cortana':" -ForegroundColor Cyan
+    Disable-Cortana
+    Write-Host "Complete.`n" -ForegroundColor Cyan
 
 
     # Disable "Show me suggested content in the Settings app"
@@ -212,8 +342,8 @@ function Protect-Privacy {
 
     # Disabling Location Tracking
     Write-Host "Disabling Location Tracking..." -ForegroundColor Yellow
-    $SensorState = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}"
-    $LocationConfig = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
+    $SensorState = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}'
+    $LocationConfig = 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration'
     if (!(Test-Path $SensorState)) { New-Item $SensorState -Force | Out-Null }
     Set-ItemProperty $SensorState SensorPermissionState -Value 0 
     if (!(Test-Path $LocationConfig)) { New-Item $LocationConfig -Force | Out-Null }
@@ -231,8 +361,13 @@ function Protect-Privacy {
         "DmClientOnScenarioDownload"
     )
     foreach ($Task in $SchedTasks) {
-        Get-ScheduledTask $Task | Disable-ScheduledTask | Out-Null
-        Write-Host "- $Task"
+        
+        $DisableMe = Get-ScheduledTask $Task -ErrorAction SilentlyContinue
+        if ($DisableMe) {
+            Disable-ScheduledTask $DisableMe | Out-Null
+            Write-Host "- $Task"
+        }
+        else { Write-Host "- $Task" -ForegroundColor Red }
     }
     Write-Host "Done." -ForegroundColor Green
 
@@ -244,9 +379,9 @@ function Protect-Privacy {
     Write-Host "Done." -ForegroundColor Green
     
 
-    # Remove CloudStore the Registry
+    # Remove CloudStore in the Registry
     Write-Host "Removing CloudStore from registry if it exists..." -ForegroundColor Yellow
-    $CloudStore = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore'
+    $CloudStore = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\CloudStore'
     if (Test-Path $CloudStore) {
         Get-Process explorer | Stop-Process -Force
         Remove-Item $CloudStore -Recurse -Force
@@ -256,133 +391,14 @@ function Protect-Privacy {
 
 
     # Disable background application access
-    Write-Host "Disabling Background application access..." -ForegroundColor Yellow
-    Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" -Exclude "Microsoft.Windows.Cortana*" | % {
+    Write-Host "Disabling background application access..." -ForegroundColor Yellow
+    Get-ChildItem -Path 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' -Exclude "Microsoft.Windows.Cortana*" | % {
         Set-ItemProperty -Path $_.PsPath -Name "Disabled" -Type DWord -Value 1
         Set-ItemProperty -Path $_.PsPath -Name "DisabledByUser" -Type DWord -Value 1
     }
     Write-Host "Done." -ForegroundColor Green
-
-
-    # Remove Paint3D stuff from context menu
-    Write-Host "Removing Paint3D context menu options..." -ForegroundColor Yellow
-    $Paint3Dstuff = @(
-        "HKCR:\SystemFileAssociations\.3mf\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.bmp\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.fbx\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.gif\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.jfif\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.jpe\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.jpeg\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.jpg\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.png\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.tif\Shell\3D Edit"
-        "HKCR:\SystemFileAssociations\.tiff\Shell\3D Edit"
-    )
-    #Rename reg key to remove it, so it's revertible
-    foreach ($Paint3D in $Paint3Dstuff) {
-        If (Test-Path $Paint3D) {
-            $rmPaint3D = $Paint3D + "_"
-            Set-Item $Paint3D $rmPaint3D
-        }
-    }
-    Write-Host "Done." -ForegroundColor Green
 }
-function Disable-Cortana {
-
-    Write-Host "Disabling Cortana..." -ForegroundColor Yellow
-    $Cortana1 = "HKCU:\SOFTWARE\Microsoft\Personalization\Settings"
-    $Cortana2 = "HKCU:\SOFTWARE\Microsoft\InputPersonalization"
-    $Cortana3 = "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore"
-    if (!(Test-Path $Cortana1)) { New-Item $Cortana1 }
-    Set-ItemProperty -Path $Cortana1 -Name AcceptedPrivacyPolicy -Value 0
-
-    if (!(Test-Path $Cortana2)) { New-Item $Cortana2 }
-    Set-ItemProperty -Path $Cortana2 -Name RestrictImplicitTextCollection -Value 1 
-    Set-ItemProperty -Path $Cortana2 -Name RestrictImplicitInkCollection -Value 1
-
-    if (!(Test-Path $Cortana3)) { New-Item $Cortana3 }
-    Set-ItemProperty -Path $Cortana3 -Name HarvestContacts -Value 0
-    
-    # Stops Cortana from being used as part of your Windows Search Function
-    $Search = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
-    if (!(Test-Path $Search)) { New-Item $Search -Force | Out-Null }
-    Set-ItemProperty -Path $Search -Name "AllowCortana" -Value 0 
-
-    Write-Host "Done." -ForegroundColor Green
-}
-function Uninstall-OneDrive {
-
-    Write-Host "Checking for files and folders in 'OneDrive'..." -ForegroundColor Yellow
-    Start-Sleep 1
-
-    if (Test-Path "$env:USERPROFILE\OneDrive\*") {
-        Write-Host "Content found. Moving to 'OneDriveBackupFiles' on your desktop prior to 'OneDrive' removal."
-        Start-Sleep 1
-        
-        if (!(Test-Path "$env:USERPROFILE\Desktop\OneDriveBackupFiles")) { 
-            New-item -Path "$env:USERPROFILE\Desktop" -Name "OneDriveBackupFiles"-ItemType Directory -Force
-        }
-
-        Start-Sleep 1
-        Move-Item -Path "$env:USERPROFILE\OneDrive\*" -Destination "$env:USERPROFILE\Desktop\OneDriveBackupFiles" -Force
-        Start-Sleep 1
-        Write-Host "Complete. Proceeding with the removal of OneDrive."
-        Start-Sleep 1
-    }
-    else {
-        Write-Host "No content found. Proceeding with removal of OneDrive."
-        Start-Sleep 1
-        
-        # Enabling the Group Policy 'Prevent the usage of OneDrive for File Storage'
-        $OneDriveKey = 'HKLM:Software\Policies\Microsoft\Windows\OneDrive'
-        if (!(Test-Path $OneDriveKey)) { New-Item $OneDriveKey -Force | Out-Null }
-        Set-ItemProperty $OneDriveKey -Name OneDrive -Value DisableFileSyncNGSC
-    }
-    Write-Host "Done." -ForegroundColor Green
-    
-
-    Write-Host "Executing 'OneDrive' uninstaller..." -ForegroundColor Yellow
-    Get-Process OneDrive | Stop-Process -Force
-    Get-Process explorer | Stop-Process -Force
-
-    $64bit = "$env:SYSTEMROOT\System32\OneDriveSetup.exe"
-    $32bit = "$env:SYSTEMROOT\SysWOW64\OneDriveSetup.exe"
-
-    if (Test-Path $64bit) { & $64bit /uninstall }
-    if (Test-Path $32bit) { & $32bit /uninstall }
-    Write-Host "Done." -ForegroundColor Green
-
-    Write-Host "Removing 'OneDrive' leftovers..." -ForegroundColor Yellow
-    Remove-Item -Recurse "$env:LOCALAPPDATA\Microsoft\OneDrive" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Recurse "$env:PROGRAMDATA\Microsoft OneDrive" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Recurse "$env:SYSTEMDRIVE\OneDriveTemp" -Force -ErrorAction SilentlyContinue
-    Write-Host "Done." -ForegroundColor Green
-
-    Write-Host "Removing 'OneDrive' from Explorer sidebar..." -ForegroundColor Yellow
-    New-Item "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Force | Out-Null
-    Set-ItemProperty -Path "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Name "System.IsPinnedToNameSpaceTree" -Value 0
-    New-Item "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Force | Out-Null
-    Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" -Name "System.IsPinnedToNameSpaceTree" -Value 0
-    Write-Host "Done." -ForegroundColor Green
-
-    Write-Host "Removing run option for new users..." -ForegroundColor Yellow
-    reg load "hku\Default" "C:\Users\Default\NTUSER.DAT"
-    reg delete "HKEY_USERS\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "OneDriveSetup" /f
-    reg unload "hku\Default"
-    Write-Host "Done." -ForegroundColor Green
-
-    Write-Host "Removing StartMenu junk entry..." -ForegroundColor Yellow
-    Remove-Item "$env:userprofile\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk" -Force -ErrorAction SilentlyContinue
-    Write-Host "Done." -ForegroundColor Green
-
-    Write-Host "Restarting explorer.exe..." -ForegroundColor Yellow
-    Start-Process "explorer.exe"
-
-    Write-Host "Waiting for Explorer to reload..." -ForegroundColor Yellow
-    Start-Sleep -Seconds 15
-}
-function Improve-UserExperience {
+function Enhance-UserExperience {
     
     function Enhance-Explorer {
 
@@ -391,7 +407,35 @@ function Improve-UserExperience {
         $ExplorerPath = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
         Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
         Write-Host "Done." -ForegroundColor Green
-    
+        
+
+        # Remove Paint3D stuff from context menu
+        Write-Host "Removing Paint3D context menu options..." -ForegroundColor Yellow
+        $Paint3DKeys = @(
+            "HKCR:\SystemFileAssociations\.3mf\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.bmp\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.fbx\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.gif\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.jfif\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.jpe\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.jpeg\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.jpg\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.png\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.tif\Shell\3D Edit"
+            "HKCR:\SystemFileAssociations\.tiff\Shell\3D Edit"
+        )
+
+        # Rename registry key to remove it, so it's revertible
+        foreach ($Paint3D in $Paint3DKeys) {
+
+            if (Test-Path $Paint3D) {
+                $RenamedKey = $Paint3D + "_"
+                Set-Item $Paint3D $RenamedKey
+            }
+        }
+        Write-Host "Done." -ForegroundColor Green
+
+
         # Removes 3D Objects from the 'My Computer' submenu in explorer
         Write-Host "Removing 3D Objects from 'My Computer' submenu..." -ForegroundColor Yellow
         $Objects32bit = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}'
@@ -435,7 +479,7 @@ function Improve-UserExperience {
     
     
         ### Unpin all Items from Start Menu
-        Write-Host "Removing remaining tiles..." -ForegroundColor Yellow
+        Write-Host "Unpinning all items from Start..." -ForegroundColor Yellow
     
         $LayoutFile="C:\Windows\StartMenuLayout.xml"
         $StartMenuContents = @"
@@ -534,35 +578,27 @@ function Improve-UserExperience {
 
 
     # Improve File Explorer
-    Write-Host "Explorer Enhancement:" -ForegroundColor Cyan
+    Write-Host "Enhancing 'Explorer':" -ForegroundColor Cyan
     Enhance-Explorer
     Write-Host "Complete.`n" -ForegroundColor Cyan
 
 
     # Remove all bloat from Taskbar
-    Write-Host "Taskbar Enhancement:" -ForegroundColor Cyan
+    Write-Host "Enhancing 'Taskbar':" -ForegroundColor Cyan
     Enhance-Taskbar
     Write-Host "Complete.`n" -ForegroundColor Cyan
 
  
     # Remove all bloat from StartMenu
-    Write-Host "StartMenu Enhancement:" -ForegroundColor Cyan
+    Write-Host "Enhancing 'Start Menu':" -ForegroundColor Cyan
     Enhance-StartMenu
     Write-Host "Complete.`n" -ForegroundColor Cyan
 
 
     # Improve Search
-    Write-Host "Search Enhancement:" -ForegroundColor Cyan
+    Write-Host "Enhancing 'Search':" -ForegroundColor Cyan
     Enhance-Search
     Write-Host "Complete.`n" -ForegroundColor Cyan
-
-
-    # Unlock and Enable 'Ultimate Performance' Power Plan
-    Write-Host "Unlocking and enabling the 'Ultimate Performance' power plan..." -ForegroundColor Yellow
-    powercfg -DUPLICATESCHEME e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
-    $PowerGUID = ((powercfg -LIST | Select-String 'Ultimate Performance') -split ' ')[3]
-    powercfg -SETACTIVE $PowerGUID
-    Write-Host "Done." -ForegroundColor Green
 
 
     # Enable Windows Dark Mode
@@ -573,8 +609,16 @@ function Improve-UserExperience {
     Write-Host "Done." -ForegroundColor Green
 
 
+    # Unlock and Enable 'Ultimate Performance' Power Plan
+    Write-Host "Unlocking and enabling the 'Ultimate Performance' power plan..." -ForegroundColor Yellow
+    powercfg -DUPLICATESCHEME e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
+    $PowerGUID = ((powercfg -LIST | Select-String 'Ultimate Performance') -split ' ')[3]
+    powercfg -SETACTIVE $PowerGUID
+    Write-Host "Done." -ForegroundColor Green
+
+
     # Remove Windows Update bandwidth limits
-    Write-Host "Removing the Windows Update bandwidth limitation..." -ForegroundColor Yellow
+    Write-Host "Removing Windows Update bandwidth limitation..." -ForegroundColor Yellow
     $Bandwidth = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Psched'
     if (!(Test-Path $Bandwidth)) { New-Item $Bandwidth -Force | Out-Null }
     Set-ItemProperty -Path $Bandwidth -Name "NonBestEffortLimit" -Value 0
@@ -582,7 +626,7 @@ function Improve-UserExperience {
 
 
     # Fixes the DMW service if it happens to be disabled or stopped.
-    Write-Host "Potentially fixing the Device Management WAP Push message Routing Service..." -ForegroundColor Yellow
+    Write-Host "Potentially fixing the 'Device Management WAP Push' message routing service..." -ForegroundColor Yellow
     if (Get-Service -Name dmwappushservice | Where-Object {$_.StartType -eq "Disabled"}) {
         Set-Service -Name dmwappushservice -StartupType Automatic
     }
@@ -593,7 +637,7 @@ function Improve-UserExperience {
 
 
     # Cleanup TEMP directory
-    Write-Host "Cleaning up the TEMP directory..." -ForegroundColor Yellow
+    Write-Host "Cleaning up the Temp directory..." -ForegroundColor Yellow
     Remove-Item -Path $env:TEMP -Recurse -Force -ErrorAction SilentlyContinue
     if (!(Test-Path $env:TEMP)) { New-Item $env:TEMP -Type Directory | Out-Null }
     Write-Host "Done." -ForegroundColor Green
@@ -622,7 +666,10 @@ function Get-TheBasics {
 
     # Enable .NET Framework 3.5
     Write-Host "Installing .NET Framework 3.5..." -ForegroundColor Yellow
-    if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -ne 'Enabled') { DISM /Online /Enable-Feature /FeatureName:NetFx3 /All }
+    if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -ne 'Enabled') { 
+        Write-Host "`n - NetFx3" -ForegroundColor Cyan
+        DISM /Online /Enable-Feature /FeatureName:NetFx3 /All
+    }
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -652,7 +699,7 @@ function Install-WSL2 {
     $NeedDependency2 = (Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -ne 'Enabled'
 
     if ($NeedDependency1 -or $NeedDependency2) {
-        Write-Host "Installing Windows Subsystem for Linux dependencies..." -ForegroundColor Yellow
+        Write-Host "Installing WSL dependencies..." -ForegroundColor Yellow
         Write-Host "`n - Microsoft-Windows-Subsystem-Linux" -ForegroundColor Cyan
         DISM /Online /Enable-Feature /FeatureName:Microsoft-Windows-Subsystem-Linux /All /NoRestart
         Write-Host "`n - VirtualMachinePlatform" -ForegroundColor Cyan
@@ -667,7 +714,7 @@ function Install-WSL2 {
     Write-Host "Downloading WSL2 kernel package..." -ForegroundColor Yellow
     $WSL2Kernel = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi'
     $WSL2Output = "$env:TEMP\WSL2_Update.msi"
-    (New-Object System.Net.WebClient).DownloadFile($WSL2Kernel, $WSL2Output)
+    [System.Net.WebClient]::new().DownloadFile($WSL2Kernel, $WSL2Output)
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -676,19 +723,19 @@ function Install-WSL2 {
     # Simple script added to RunOnce key to install/enable WSL2 after reboot.
     if ($Reboot) {
 
-        Write-Host "Creating script to install and set WSL to version 2 after the restart..." -ForegroundColor Yellow
+        Write-Host "Creating registry entry to finish WSL2 installation after reboot..." -ForegroundColor Yellow
 
         # Note: The RunOnce registry key has a value limit of 260 characters; exceeding this limit will cause the Key to not run.
         $Command = @(
 
             "msiexec /i `$env:TEMP\WSL2_Update.msi /passive;"
-            "write-host 'Press any key to continue installation...' -f y;"
-            "`$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown');"
-            "rm `$env:TEMP -r -fo;"
+            "Write-Host 'Press any key to continue WSL2 installation.' -F y;"
+            "`$NULL = `$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');"
+            "rm `$env:TEMP -R -Fo;"
             "wsl --set-default-version 2;"
-            "write-host 'Done!' -f y; sleep 3"
+            "Write-Host 'Done.' -F y; Sleep 5"
 
-        ) -join ' '
+        ) -join ''
 
         Set-ItemProperty -Path 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WSL2 Setup' -Value "powershell `"$Command`""
         Write-Host "Done." -ForegroundColor Green
@@ -708,6 +755,29 @@ function Install-WSL2 {
         Write-Host "Done." -ForegroundColor Green
     }
 }
+function Get-UserInput ($Question) {
+
+    $Underline = '─' * $Question.Length
+    Write-Host "`n$Question" -ForegroundColor Yellow
+    Write-Host "$Underline"
+
+    Write-Host '['   -NoNewLine
+    Write-Host 'yes' -NoNewLine -ForegroundColor Green
+    Write-Host '/'   -NoNewLine
+    write-host 'no'  -NoNewLine -ForegroundColor Red
+    Write-Host ']: ' -NoNewLine
+
+    $Answer = Read-Host
+    if (($Answer -eq 'y') -or ($Answer -eq 'yes')) { $Boolean = $TRUE }
+    else { $Boolean = $FALSE }
+
+    return $Boolean
+}
+
+
+# Prompt installation options
+$ToolBool = Get-UserInput -Question "Install 'Chocolatey' (and other common tools)?"
+$WSL2Bool = Get-UserInput -Question "Install 'Windows Subsystem for Linux' (WSL2)?"
 
 
 #Create a "Drive" to access the HKCR (HKEY_CLASSES_ROOT)
@@ -719,57 +789,33 @@ Start-Sleep 1
 
 
 # Remove Bloatware
-Write-Host "`n─────────────────────────────────"
-Write-Host "Uninstalling Windows 10 Bloatware" -ForegroundColor Magenta
-Write-Host "─────────────────────────────────"
-Debloat-Windows
-Start-Sleep 1
-
-
-# Remove Registry Keys
-Write-Host "`n───────────────────────────────────"
-Write-Host "Removing Questionable Registry Keys" -ForegroundColor Magenta
-Write-Host "───────────────────────────────────"
-Remove-Keys
+Write-Host "`n─────────────────────────────"
+Write-Host "Removing Windows 10 Bloatware" -ForegroundColor Magenta
+Write-Host "─────────────────────────────"
+Remove-WindowsBloat
 Start-Sleep 1
 
 
 # Improve User Privacy
-Write-Host "`n─────────────────"
-Write-Host "Hardening Privacy" -ForegroundColor Magenta
-Write-Host "─────────────────"
+Write-Host "`n──────────────────────"
+Write-Host "Hardening User Privacy" -ForegroundColor Magenta
+Write-Host "──────────────────────"
 Protect-Privacy
-Start-Sleep 1
-
-
-# Disable Cortana
-Write-Host "`n─────────────────"
-Write-Host "Disabling Cortana" -ForegroundColor Magenta
-Write-Host "─────────────────"
-Disable-Cortana
-Start-Sleep 1
-
-
-# Remove OneDrive
-Write-Host "`n─────────────────"
-Write-Host "Removing OneDrive" -ForegroundColor Magenta
-Write-Host "─────────────────"
-Uninstall-OneDrive
 Start-Sleep 1
 
 
 # Beautify, Repair, and Speed Up User Experience
 Write-Host "`n─────────────────────────"
-Write-Host "Improving User Experience" -ForegroundColor Magenta
+Write-Host "Enhancing User Experience" -ForegroundColor Magenta
 Write-Host "─────────────────────────"
-Improve-UserExperience
+Enhance-UserExperience
 Start-Sleep 1
 
 
 # Install Commonly Downloaded Utilities; Update Existing Features
-Write-Host "`n────────────────────────"
-Write-Host "Installing Helpful Tools" -ForegroundColor Magenta
-Write-Host "────────────────────────"
+Write-Host "`n───────────────────────────"
+Write-Host "Updating & Installing Tools" -ForegroundColor Magenta
+Write-Host "───────────────────────────"
 Get-TheBasics
 Start-Sleep 1
 
@@ -785,9 +831,9 @@ if ($WSL2Bool) {
 
 
 # Unload the Created "Drive" from the First Step
-Write-Host "`n────────────────────────"
-Write-Host "Unloading the HKCR Drive" -ForegroundColor Magenta
-Write-Host "────────────────────────"
+Write-Host "`n───────────────────────"
+Write-Host "Removing PSDrive 'HKCR'" -ForegroundColor Magenta
+Write-Host "───────────────────────"
 Remove-PSDrive HKCR
 Write-Host "Done." -ForegroundColor Green
 Start-Sleep 1
@@ -795,14 +841,15 @@ Start-Sleep 1
 
 # Remove Internet Explorer and/or Reboot System
 if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -eq 'Enabled') {
-    Write-Host "`n─────────────────────────"
-    Write-Host "Removing IE and Rebooting" -ForegroundColor Magenta
-    Write-Host "─────────────────────────"
+    Write-Host "`n───────────────────────"
+    Write-Host "Removing IE & Rebooting" -ForegroundColor Magenta
+    Write-Host "───────────────────────"
     Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online
 }
 else {
     Write-Host "`n─────────"
     Write-Host "Rebooting" -ForegroundColor Magenta
     Write-Host "─────────"
-    shutdown /r /t 5
+    $ReBool = Get-UserInput -Question 'Would you like to reboot your computer now?'
+    if ($ReBool) { shutdown /r /t 5 }
 }
