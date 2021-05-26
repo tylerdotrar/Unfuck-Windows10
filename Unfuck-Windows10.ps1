@@ -1,6 +1,6 @@
 ﻿<#
 Unfuck-Windows10.ps1 
-Version 1.3.7
+Version 1.4.0
 This script was tested on Windows 10 Pro (version 20H2) -- it has not been tested on Windows 10 Home.
 
 Purpose:         Debloat Windows 10, improve performance, and enhance user privacy & experience.
@@ -388,17 +388,18 @@ function Improve-UserExperience {
 
         # Show File Extensions in Explorer
         Write-Host "Enabling file name extensions..." -ForegroundColor Yellow
-        $ExplorerPath = "Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+        $ExplorerPath = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
         Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
         Write-Host "Done." -ForegroundColor Green
-
+    
         # Removes 3D Objects from the 'My Computer' submenu in explorer
         Write-Host "Removing 3D Objects from 'My Computer' submenu..." -ForegroundColor Yellow
-        $Objects32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
-        $Objects64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
-
-        if (Test-Path $Objects32) { Remove-Item $Objects32 -Recurse }
-        if (Test-Path $Objects64) { Remove-Item $Objects64 -Recurse }
+        $Objects32bit = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}'
+        $Objects64bit = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}'
+    
+        if (Test-Path $Objects32bit) { Remove-Item $Objects32bit -Recurse }
+        if (Test-Path $Objects64bit) { Remove-Item $Objects64bit -Recurse }
+    
         Write-Host "Done." -ForegroundColor Green
     }
     function Enhance-Search {
@@ -407,19 +408,20 @@ function Improve-UserExperience {
         Write-Host "Removing Bing suggestions..." -ForegroundColor Yellow
         $BingSearch = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Explorer'
         if (!(Test-Path $BingSearch)) { New-Item $BingSearch -Force | Out-Null }
-        Set-ItemProperty -Path $BingSearch -Name "DisableSearchBoxSuggestions" -Value 1
+        Set-ItemProperty -Path $BingSearch -Name DisableSearchBoxSuggestions -Value 1
         Write-Host "Done." -ForegroundColor Green
-
-
+    
+    
         # Set Windows Search to use 'Enhanced' Mode; Creates a Scheduled Task that runs as SYSTEM to change Registry Key and then deletes itself.
         Write-Host "Enabling 'Enhanced' mode..." -ForegroundColor Yellow
         $EnhancedSearch = "Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex' -Name 'EnableFindMyFiles' -Value 1"
-
+    
         $PS = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-command `"$EnhancedSearch`""
         $Time = New-ScheduledTaskTrigger -At (Get-Date).AddSeconds(5) -Once
         $Time.EndBoundary = (Get-Date).AddSeconds(15).ToString('s')
         $Remove = New-ScheduledTaskSettingsSet -DeleteExpiredTaskAfter 00:00:01
         Register-ScheduledTask -TaskName 'Enhance Search' -Action $PS -Trigger $Time -Settings $Remove -User SYSTEM -Force | Out-Null
+        
         Write-Host "Done." -ForegroundColor Green
     }
     function Enhance-StartMenu {
@@ -430,52 +432,57 @@ function Improve-UserExperience {
         if (!(Test-Path $LiveTiles)) { New-Item $LiveTiles -Force | Out-Null }
         Set-ItemProperty -Path $LiveTiles -Name 'NoTileApplicationNotification' -Value 1
         Write-Host "Done." -ForegroundColor Green
-
-
+    
+    
         ### Unpin all Items from Start Menu
         Write-Host "Removing remaining tiles..." -ForegroundColor Yellow
-
+    
         $LayoutFile="C:\Windows\StartMenuLayout.xml"
-        $START_MENU_LAYOUT = @"
+        $StartMenuContents = @"
 <LayoutModificationTemplate xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" Version="1" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification">
-    <LayoutOptions StartTileGroupCellWidth="6" />
-    <DefaultLayoutOverride>
-        <StartLayoutCollection>
-            <defaultlayout:StartLayout GroupCellWidth="6" />
-        </StartLayoutCollection>
-    </DefaultLayoutOverride>
+<LayoutOptions StartTileGroupCellWidth="6" />
+<DefaultLayoutOverride>
+    <StartLayoutCollection>
+        <defaultlayout:StartLayout GroupCellWidth="6" />
+    </StartLayoutCollection>
+</DefaultLayoutOverride>
 </LayoutModificationTemplate>
 "@
-
+    
         # Create new empty layout file
         if (Test-Path $LayoutFile) { Remove-Item $LayoutFile }
-        $START_MENU_LAYOUT | Out-File $layoutFile -Encoding ASCII
-
+        $StartMenuContents | Out-File $LayoutFile -Encoding ASCII
+    
         # Assign the start layout and force it to apply with "LockedStartLayout" at both the machine and user level
-        $regAliases = @("HKLM", "HKCU")
-        foreach ($regAlias in $regAliases){
-            $basePath = $regAlias + ":\SOFTWARE\Policies\Microsoft\Windows"
-            $keyPath = $basePath + "\Explorer" 
-            if (!(Test-Path -Path $keyPath)) { New-Item -Path $basePath -Name "Explorer" | Out-Null }
-            Set-ItemProperty -Path $keyPath -Name "LockedStartLayout" -Value 1
-            Set-ItemProperty -Path $keyPath -Name "StartLayoutFile" -Value $LayoutFile
+        $HiveKeys = @('Registry::HKEY_LOCAL_MACHINE','Registry::HKEY_CURRENT_USER')
+        
+        foreach ($Hive in $HiveKeys) {
+            $Parent = $Hive + "\SOFTWARE\Policies\Microsoft\Windows"
+            $KeyPath = $Parent + "\Explorer" 
+            if (!(Test-Path -Path $KeyPath)) { New-Item -Path $Parent -Name "Explorer" | Out-Null }
+            Set-ItemProperty -Path $KeyPath -Name 'LockedStartLayout' -Value 1
+            Set-ItemProperty -Path $KeyPath -Name 'StartLayoutFile' -Value $LayoutFile
         }
-
-        #Restart Explorer, open the start menu (necessary to load the new layout), and give it a few seconds to process
-        Stop-Process -Name explorer ; Sleep 5
-        $wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('^{ESCAPE}') ; Sleep 5
-
-        #Enable the ability to pin items again by disabling "LockedStartLayout"
-        foreach ($regAlias in $regAliases){
-            $basePath = $regAlias + ":\SOFTWARE\Policies\Microsoft\Windows"
-            $keyPath = $basePath + "\Explorer" 
-            Set-ItemProperty -Path $keyPath -Name "LockedStartLayout" -Value 0
+    
+        # Restart Explorer, open the start menu (necessary to load the new layout), and give it a few seconds to process
+        Get-Process -Name explorer | Stop-Process
+        Start-Sleep 5
+    
+        $Shell = New-Object -ComObject wscript.shell
+        $Shell.SendKeys('^{ESCAPE}')
+        Start-Sleep 5
+    
+        # Enable the ability to pin items again by disabling "LockedStartLayout"
+        foreach ($Hive in $HiveKeys){
+            $Parent = $Hive + "\SOFTWARE\Policies\Microsoft\Windows"
+            $KeyPath = $Parent + "\Explorer" 
+            Set-ItemProperty -Path $KeyPath -Name 'LockedStartLayout' -Value 0
         }
-
-        #Restart Explorer and delete the layout file
-        Stop-Process -name explorer
-        Remove-Item $layoutFile
-
+    
+        # Restart Explorer and delete the layout file
+        Get-Process -Name explorer | Stop-Process
+        Remove-Item $LayoutFile
+    
         Write-Host "Done." -ForegroundColor Green
     }
     function Enhance-Taskbar {
@@ -483,41 +490,48 @@ function Improve-UserExperience {
         # Remove Microsoft Edge and Microsoft Store from Taskbar
         Write-Host "Removing 'Microsoft Store' and 'Microsoft Edge'..." -ForegroundColor Yellow
         $Items = @('Microsoft Store', 'Microsoft Edge')
+    
         $ObjectList = (New-Object -Com Shell.Application).NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}').Items()
         foreach ($Item in $Items) { 
             $ObjectList | ? { $_.Name -eq $Item } | % {$_.Verbs()} | ? { $_.Name.Replace('&','') -eq 'Unpin from Taskbar' } | % { $_.DoIt() }
         }
+        
         $ObjectList = $NULL
         Write-Host "Done." -ForegroundColor Green
-
+    
+    
         # Remove 'People' icon from Taskbar
         Write-Host "Removing 'People'..." -ForegroundColor Yellow
         $People = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
         if (!(Test-Path $People)) { New-Item $People -Force | Out-Null }
-        Set-ItemProperty -Path $People -Name PeopleBand -Value 0
+        Set-ItemProperty -Path $People -Name 'PeopleBand' -Value 0
         Write-Host "Done." -ForegroundColor Green
-
+    
+    
         # Remove 'Meet Now' from the Taskbar
         Write-Host "Removing 'Meet Now'..." -ForegroundColor Yellow
         $MeetNow = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
         if (!(Test-Path $MeetNow)) { New-Item $MeetNow -Force | Out-Null }
-        Set-ItemProperty -Path $MeetNow -Name "HideSCAMeetNow" -Value 1
+        Set-ItemProperty -Path $MeetNow -Name 'HideSCAMeetNow' -Value 1
         Write-Host "Done." -ForegroundColor Green
-
+    
+    
         # Remove 'TaskView' from the Taskbar
         Write-Host "Removing 'Task View'..." -ForegroundColor Yellow
         $TaskView = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
         if (!(Test-Path $TaskView)) { New-Item $TaskView -Force | Out-Null }
-        Set-ItemProperty -Path $TaskView -Name "ShowTaskViewButton" -Value 0
+        Set-ItemProperty -Path $TaskView -Name 'ShowTaskViewButton' -Value 0
         Write-Host "Done." -ForegroundColor Green
-
+    
+    
         # Hide Search Box on Taskbar
         Write-Host "Hiding the Search Box..." -ForegroundColor Yellow
         $SearchBox = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
         if (!(Test-Path $SearchBox)) { New-Item $SearchBox -Force | Out-Null }
-        Set-ItemProperty -Path $SearchBox -Name "SearchboxTaskbarMode" -Value 0
+        Set-ItemProperty -Path $SearchBox -Name 'SearchboxTaskbarMode' -Value 0
         Write-Host "Done." -ForegroundColor Green
     }
+
 
     # Improve File Explorer
     Write-Host "Explorer Enhancement:" -ForegroundColor Cyan
@@ -632,14 +646,16 @@ function Get-TheBasics {
     }
 }
 function Install-WSL2 {
-
+    
     ### Windows Subsystem for Linux (Part 1) -- Install Dependencies
     $NeedDependency1 = (Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -ne 'Enabled'
     $NeedDependency2 = (Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -ne 'Enabled'
 
     if ($NeedDependency1 -or $NeedDependency2) {
-        Write-Host "Installing WSL dependencies..." -ForegroundColor Yellow
+        Write-Host "Installing Windows Subsystem for Linux dependencies..." -ForegroundColor Yellow
+        Write-Host "`n - Microsoft-Windows-Subsystem-Linux" -ForegroundColor Cyan
         DISM /Online /Enable-Feature /FeatureName:Microsoft-Windows-Subsystem-Linux /All /NoRestart
+        Write-Host "`n - VirtualMachinePlatform" -ForegroundColor Cyan
         DISM /Online /Enable-Feature /FeatureName:VirtualMachinePlatform /All /NoRestart
         Write-Host "Done." -ForegroundColor Green
 
@@ -659,9 +675,22 @@ function Install-WSL2 {
     
     # Simple script added to RunOnce key to install/enable WSL2 after reboot.
     if ($Reboot) {
+
         Write-Host "Creating script to install and set WSL to version 2 after the restart..." -ForegroundColor Yellow
-        $Command = "msiexec /i `$env:TEMP\WSL2_Update.msi /passive; write-host 'Press any key to continue installation...' -f y; `$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown'); rm `$env:TEMP -r -fo; wsl --set-default-version 2; write-host 'Done!' -f y; sleep 3"
-        Set-ItemProperty -Path 'Registry::HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WSL2 Setup' -Value "powershell `"$Command`""
+
+        # Note: The RunOnce registry key has a value limit of 260 characters; exceeding this limit will cause the Key to not run.
+        $Command = @(
+
+            "msiexec /i `$env:TEMP\WSL2_Update.msi /passive;"
+            "write-host 'Press any key to continue installation...' -f y;"
+            "`$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown');"
+            "rm `$env:TEMP -r -fo;"
+            "wsl --set-default-version 2;"
+            "write-host 'Done!' -f y; sleep 3"
+
+        ) -join ' '
+
+        Set-ItemProperty -Path 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WSL2 Setup' -Value "powershell `"$Command`""
         Write-Host "Done." -ForegroundColor Green
         Start-Sleep -Seconds 1
     }
