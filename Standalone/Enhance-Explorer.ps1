@@ -7,6 +7,34 @@ function Enhance-Explorer {
     $ExplorerPath = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
     Set-ItemProperty -Path $ExplorerPath -Name HideFileExt -Value 0
     Write-Host "Done." -ForegroundColor Green
+    
+
+    # Remove Paint3D stuff from context menu
+    Write-Host "Removing Paint3D context menu options..." -ForegroundColor Yellow
+    $Paint3DKeys = @(
+        "HKCR:\SystemFileAssociations\.3mf\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.bmp\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.fbx\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.gif\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.jfif\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.jpe\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.jpeg\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.jpg\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.png\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.tif\Shell\3D Edit"
+        "HKCR:\SystemFileAssociations\.tiff\Shell\3D Edit"
+    )
+
+    # Rename registry key to remove it, so it's revertible
+    foreach ($Paint3D in $Paint3DKeys) {
+
+        if (Test-Path $Paint3D) {
+            $RenamedKey = $Paint3D + "_"
+            Set-Item $Paint3D $RenamedKey
+        }
+    }
+    Write-Host "Done." -ForegroundColor Green
+
 
     # Removes 3D Objects from the 'My Computer' submenu in explorer
     Write-Host "Removing 3D Objects from 'My Computer' submenu..." -ForegroundColor Yellow

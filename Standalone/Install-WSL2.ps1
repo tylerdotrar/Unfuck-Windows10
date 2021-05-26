@@ -13,7 +13,7 @@ function Install-WSL2 {
     $NeedDependency2 = (Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -ne 'Enabled'
 
     if ($NeedDependency1 -or $NeedDependency2) {
-        Write-Host "Installing Windows Subsystem for Linux dependencies..." -ForegroundColor Yellow
+        Write-Host "Installing WSL dependencies..." -ForegroundColor Yellow
         Write-Host "`n - Microsoft-Windows-Subsystem-Linux" -ForegroundColor Cyan
         DISM /Online /Enable-Feature /FeatureName:Microsoft-Windows-Subsystem-Linux /All /NoRestart
         Write-Host "`n - VirtualMachinePlatform" -ForegroundColor Cyan
@@ -28,7 +28,7 @@ function Install-WSL2 {
     Write-Host "Downloading WSL2 kernel package..." -ForegroundColor Yellow
     $WSL2Kernel = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi'
     $WSL2Output = "$env:TEMP\WSL2_Update.msi"
-    (New-Object System.Net.WebClient).DownloadFile($WSL2Kernel, $WSL2Output)
+    [System.Net.WebClient]::new().DownloadFile($WSL2Kernel, $WSL2Output)
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -37,19 +37,19 @@ function Install-WSL2 {
     # Simple script added to RunOnce key to install/enable WSL2 after reboot.
     if ($Reboot) {
 
-        Write-Host "Creating script to install and set WSL to version 2 after the restart..." -ForegroundColor Yellow
+        Write-Host "Creating registry entry to finish WSL2 installation after reboot..." -ForegroundColor Yellow
 
         # Note: The RunOnce registry key has a value limit of 260 characters; exceeding this limit will cause the Key to not run.
         $Command = @(
 
             "msiexec /i `$env:TEMP\WSL2_Update.msi /passive;"
-            "write-host 'Press any key to continue installation...' -f y;"
-            "`$null=`$host.ui.rawui.readkey('NoEcho,IncludeKeyDown');"
-            "rm `$env:TEMP -r -fo;"
+            "Write-Host 'Press any key to continue WSL2 installation.' -F y;"
+            "`$NULL = `$Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');"
+            "rm `$env:TEMP -R -Fo;"
             "wsl --set-default-version 2;"
-            "write-host 'Done!' -f y; sleep 3"
+            "Write-Host 'Done.' -F y; Sleep 5"
 
-        ) -join ' '
+        ) -join ''
 
         Set-ItemProperty -Path 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'WSL2 Setup' -Value "powershell `"$Command`""
         Write-Host "Done." -ForegroundColor Green

@@ -18,9 +18,9 @@ function Enhance-StartMenu {
 <LayoutModificationTemplate xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" Version="1" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification">
 <LayoutOptions StartTileGroupCellWidth="6" />
 <DefaultLayoutOverride>
-    <StartLayoutCollection>
-        <defaultlayout:StartLayout GroupCellWidth="6" />
-    </StartLayoutCollection>
+<StartLayoutCollection>
+    <defaultlayout:StartLayout GroupCellWidth="6" />
+</StartLayoutCollection>
 </DefaultLayoutOverride>
 </LayoutModificationTemplate>
 "@
