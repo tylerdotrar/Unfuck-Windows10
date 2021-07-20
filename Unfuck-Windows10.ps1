@@ -1,11 +1,11 @@
 ﻿<#
-Unfuck-Windows10.ps1 
-Version 1.4.3
-This script was tested on Windows 10 Pro (version 20H2) -- it has not been tested on Windows 10 Home.
+Unfuck-Windows11.ps1 
+Version 2.0.0
+This script was tested on Windows 10 Pro (20H2,21H1) and the Windows 11 Developer Build (Home,Pro).
 
-Purpose:         Debloat Windows 10, improve performance, and enhance user privacy & experience.
+Purpose:         Debloat Windows 10/11, improve performance, and enhance user privacy & experience.
 Requirements:    Run with elevated privileges (i.e., Administrator)
-Syntax:          iex ((New-Object System.Net.WebClient).DownloadString('https://git.io/JspIT'))
+Syntax:          iex (([System.Net.WebClient]::new().DownloadString('https://git.io/JspIT'))
 
 Links:
 https://github.com/tylerdotrar/Unfuck-Windows10
@@ -19,6 +19,43 @@ $isAdmin = (New-Object Security.Principal.WindowsPrincipal $User).IsInRole([Secu
 if (!$isAdmin) { return (Write-Host 'This script requires elevated privileges.' -ForegroundColor Red) }
 
 
+# Visual Formatting and Prompts
+function Get-UserInput ($Question) {
+
+    $Underline = '─' * $Question.Length
+    Write-Host "`n$Question" -ForegroundColor Yellow
+    Write-Host "$Underline"
+
+    Write-Host '['   -NoNewLine
+    Write-Host 'yes' -NoNewLine -ForegroundColor Green
+    Write-Host '/'   -NoNewLine
+    write-host 'no'  -NoNewLine -ForegroundColor Red
+    Write-Host ']: ' -NoNewLine
+
+    $Answer = Read-Host
+    if (($Answer -eq 'y') -or ($Answer -eq 'yes')) { $Boolean = $TRUE }
+    else { $Boolean = $FALSE }
+
+    return $Boolean
+}
+function Start-Function ([string]$Message, [string]$Invoke) {
+    
+    $Lines = '═' * $Message.Length
+    $Upper = "`n╔═$Lines═╗`n║ "
+    $Lower = " ║`n╚═$Lines═╝"
+
+    Write-Host $Upper -NoNewline -ForegroundColor Magenta
+    Write-Host $Message -NoNewline
+    Write-Host $Lower -ForegroundColor Magenta
+
+    if ($Invoke) {
+        Invoke-Expression $Invoke
+        Start-Sleep -Seconds 1
+    }
+}
+
+
+# Main Debloat Functionality
 function Remove-WindowsBloat {
 
     function Uninstall-OneDrive {
@@ -175,7 +212,7 @@ function Remove-WindowsBloat {
     )
 
     # Remove bloat apps and packages
-    Write-Host "Attemping to remove bloatware..." -ForegroundColor Yellow
+    Write-Host "Attempting to remove bloatware..." -ForegroundColor Yellow
     foreach ($Bloat in $Bloatware) {
 
         $Package1 = (Get-AppxPackage -AllUsers -Name $Bloat)
@@ -244,8 +281,10 @@ function Remove-WindowsBloat {
 
     # Uninstall 'OneDrive'
     Write-Host "`nRemoving 'OneDrive':" -ForegroundColor Cyan
+    Write-Host '────────────────────'
     Uninstall-OneDrive
-    Write-Host "Complete." -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete" -ForegroundColor Cyan
 }
 function Protect-Privacy {
     
@@ -324,8 +363,10 @@ function Protect-Privacy {
 
     # Disable 'Cortana'
     Write-Host "`nDisabling 'Cortana':" -ForegroundColor Cyan
+    Write-Host '────────────────────'
     Disable-Cortana
-    Write-Host "Complete.`n" -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete`n" -ForegroundColor Cyan
 
 
     # Disable "Show me suggested content in the Settings app"
@@ -397,6 +438,15 @@ function Protect-Privacy {
         Set-ItemProperty -Path $_.PsPath -Name "DisabledByUser" -Type DWord -Value 1
     }
     Write-Host "Done." -ForegroundColor Green
+
+
+    # Disable Voice Activation
+    Write-Host "Disabling voice activation..." -ForegroundColor Yellow
+    $VoiceActivation = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\VoiceActivation\UserPreferenceForAllApps'
+    if (!(Test-Path $VoiceActivation)) { New-Item $VoiceActivation -Force | Out-Null }
+    Set-ItemProperty -Path $VoiceActivation -Name 'AgentActivationEnabled' -Value 0
+    Set-ItemProperty -Path $VoiceActivation -Name 'AgentActivationOnLockScreenEnabled' -Value 0
+    Write-Host "Done." -ForegroundColor Green
 }
 function Enhance-UserExperience {
     
@@ -457,7 +507,7 @@ function Enhance-UserExperience {
     
     
         # Set Windows Search to use 'Enhanced' Mode; Creates a Scheduled Task that runs as SYSTEM to change Registry Key and then deletes itself.
-        Write-Host "Enabling 'Enhanced' mode..." -ForegroundColor Yellow
+        Write-Host "Enabling 'Enhanced' search mode..." -ForegroundColor Yellow
         $EnhancedSearch = "Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex' -Name 'EnableFindMyFiles' -Value 1"
     
         $PS = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-command `"$EnhancedSearch`""
@@ -471,7 +521,7 @@ function Enhance-UserExperience {
     function Enhance-StartMenu {
 
         # Disable Live Tiles
-        Write-Host "Disabling 'Live Tiles'..." -ForegroundColor Yellow
+        Write-Host "Disabling 'Live Tiles'... (Windows 10)" -ForegroundColor Yellow
         $LiveTiles = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications'
         if (!(Test-Path $LiveTiles)) { New-Item $LiveTiles -Force | Out-Null }
         Set-ItemProperty -Path $LiveTiles -Name 'NoTileApplicationNotification' -Value 1
@@ -479,7 +529,7 @@ function Enhance-UserExperience {
     
     
         ### Unpin all Items from Start Menu
-        Write-Host "Unpinning all items from Start..." -ForegroundColor Yellow
+        Write-Host "Unpinning all items from Start... (Windows 10)" -ForegroundColor Yellow
     
         $LayoutFile="C:\Windows\StartMenuLayout.xml"
         $StartMenuContents = @"
@@ -544,29 +594,53 @@ function Enhance-UserExperience {
         Write-Host "Done." -ForegroundColor Green
     
     
-        # Remove 'People' icon from Taskbar
-        Write-Host "Removing 'People'..." -ForegroundColor Yellow
+        # Remove 'People' icon from Taskbar (Win10)
+        Write-Host "Removing 'People'... (Windows 10)" -ForegroundColor Yellow
         $People = 'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
         if (!(Test-Path $People)) { New-Item $People -Force | Out-Null }
         Set-ItemProperty -Path $People -Name 'PeopleBand' -Value 0
         Write-Host "Done." -ForegroundColor Green
     
     
-        # Remove 'Meet Now' from the Taskbar
-        Write-Host "Removing 'Meet Now'..." -ForegroundColor Yellow
+        # Remove 'Meet Now' from the Taskbar (Win10)
+        Write-Host "Removing 'Meet Now'... (Windows 10)" -ForegroundColor Yellow
         $MeetNow = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
         if (!(Test-Path $MeetNow)) { New-Item $MeetNow -Force | Out-Null }
         Set-ItemProperty -Path $MeetNow -Name 'HideSCAMeetNow' -Value 1
         Write-Host "Done." -ForegroundColor Green
+
+
+        # Remove 'News and Interests' from the Taskbar (Win10)
+        Write-Host "Removing 'News and Interests'... (Windows 10)" -ForegroundColor Yellow
+        $NewsInterests = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Feeds'
+        if (!(Test-Path $NewsInterests)) { New-Item $NewsInterests -Force | Out-Null }
+        Set-ItemProperty -Path $NewsInterests -Name 'ShellFeedsTaskbarViewMode' -Value 0
+        Write-Host "Done." -ForegroundColor Green
     
-    
+        
+        # Remove 'Widgets' Tab from Taskbar (Win11)
+        Write-Host "Removing 'Widgets' tab... (Windows 11)" -ForegroundColor Yellow
+        $WidgetsTab = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+        if (!(Test-Path $WidgetsTab)) { New-Item $WidgetsTab -Force | Out-Null }
+        Set-ItemProperty -Path $WidgetsTab -Name 'TaskbarDa' -Value 0
+        Write-Host "Done." -ForegroundColor Green
+
+
+        # Align Taskbar to the Left (Win11)
+        Write-Host "Aligning taskbar to the left... (Windows 11)" -ForegroundColor Yellow
+        $LeftAlign = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+        if (!(Test-Path $LeftAlign)) { New-Item $LeftAlign -Force | Out-Null }
+        Set-ItemProperty -Path $LeftAlign -Name 'TaskbarAl' -Value 0
+        Write-Host "Done." -ForegroundColor Green
+
+
         # Remove 'TaskView' from the Taskbar
         Write-Host "Removing 'Task View'..." -ForegroundColor Yellow
         $TaskView = 'Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
         if (!(Test-Path $TaskView)) { New-Item $TaskView -Force | Out-Null }
         Set-ItemProperty -Path $TaskView -Name 'ShowTaskViewButton' -Value 0
         Write-Host "Done." -ForegroundColor Green
-    
+
     
         # Hide Search Box on Taskbar
         Write-Host "Hiding the Search Box..." -ForegroundColor Yellow
@@ -579,26 +653,34 @@ function Enhance-UserExperience {
 
     # Improve File Explorer
     Write-Host "Enhancing 'Explorer':" -ForegroundColor Cyan
+    Write-Host '─────────────────────'
     Enhance-Explorer
-    Write-Host "Complete.`n" -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete`n" -ForegroundColor Cyan
 
 
     # Remove all bloat from Taskbar
     Write-Host "Enhancing 'Taskbar':" -ForegroundColor Cyan
+    Write-Host '────────────────────'
     Enhance-Taskbar
-    Write-Host "Complete.`n" -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete`n" -ForegroundColor Cyan
 
  
     # Remove all bloat from StartMenu
-    Write-Host "Enhancing 'Start Menu':" -ForegroundColor Cyan
+    Write-Host "Enhancing 'Start Menu' (Windows 10):" -ForegroundColor Cyan
+    Write-Host '────────────────────────────────────'
     Enhance-StartMenu
-    Write-Host "Complete.`n" -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete`n" -ForegroundColor Cyan
 
 
     # Improve Search
     Write-Host "Enhancing 'Search':" -ForegroundColor Cyan
+    Write-Host '───────────────────'
     Enhance-Search
-    Write-Host "Complete.`n" -ForegroundColor Cyan
+    Write-Host '────────'
+    Write-Host "Complete`n" -ForegroundColor Cyan
 
 
     # Enable Windows Dark Mode
@@ -665,11 +747,22 @@ function Get-TheBasics {
     
 
     # Enable .NET Framework 3.5
-    Write-Host "Installing .NET Framework 3.5..." -ForegroundColor Yellow
+    Write-Host "Installing .NET Framework 3.5... (Windows 10)" -ForegroundColor Yellow
     if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -ne 'Enabled') { 
         Write-Host "`n - NetFx3" -ForegroundColor Cyan
         DISM /Online /Enable-Feature /FeatureName:NetFx3 /All
     }
+    else { Write-Host "`n - Skipping" -ForegroundColor Cyan }
+    Write-Host "Done." -ForegroundColor Green
+
+
+    # Enable ASP .NET Framework 4.X
+    Write-Host "Installing ASP .NET 4.X... (Windows 11)" -ForegroundColor Yellow
+    if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx4Extended-ASPNET45).State -ne 'Enabled') { 
+        Write-Host "`n - NetFx4Extended-ASPNET45" -ForegroundColor Cyan
+        DISM /Online /Enable-Feature /FeatureName:NetFx4Extended-ASPNET45 /NoRestart
+    }
+    else { Write-Host "`n - Skipping" -ForegroundColor Cyan }
     Write-Host "Done." -ForegroundColor Green
 
 
@@ -682,11 +775,11 @@ function Get-TheBasics {
 
 
         # The Basics
-        Write-Host "Installing the basics..." -ForegroundColor Yellow
+        Write-Host "Installing commonly used tools..." -ForegroundColor Yellow
+        choco install vim --params "'/NoContextmenu /NoDesktopShortcuts /InstallDir:C:\Arbitrary\Tools'" -y | Out-Null ; "- vim"
+        choco install notepadplusplus -ia /D=C:\Arbitrary\Tools\Notepad++ -y | Out-Null ; "- notepadplusplus"
+        choco install 7zip -ia /D=C:\Arbitrary\Tools\7-Zip+ -y | Out-Null ; "- 7zip"
         choco install git --params "/GitOnlyOnPath /NoShellIntegration" -y | Out-Null ; "- git"
-        choco install vim --params "'/NoContextmenu /NoDesktopShortcuts /InstallDir:C:\.Tools'" -y | Out-Null ; "- vim"
-        choco install notepadplusplus -ia /D=C:\.Tools\Notepad++ -y | Out-Null ; "- notepadplusplus"
-        choco install 7zip -ia /D=C:\.Tools\7-Zip+ -y | Out-Null ; "- 7zip"
         choco install powershell-core --install-arguments='"ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1"' -y | Out-Null ; "- powershell-core"
         choco install microsoft-windows-terminal -y | Out-Null ; "- microsoft-windows-terminal"
         Write-Host "Done." -ForegroundColor Green
@@ -755,24 +848,6 @@ function Install-WSL2 {
         Write-Host "Done." -ForegroundColor Green
     }
 }
-function Get-UserInput ($Question) {
-
-    $Underline = '─' * $Question.Length
-    Write-Host "`n$Question" -ForegroundColor Yellow
-    Write-Host "$Underline"
-
-    Write-Host '['   -NoNewLine
-    Write-Host 'yes' -NoNewLine -ForegroundColor Green
-    Write-Host '/'   -NoNewLine
-    write-host 'no'  -NoNewLine -ForegroundColor Red
-    Write-Host ']: ' -NoNewLine
-
-    $Answer = Read-Host
-    if (($Answer -eq 'y') -or ($Answer -eq 'yes')) { $Boolean = $TRUE }
-    else { $Boolean = $FALSE }
-
-    return $Boolean
-}
 
 
 # Prompt installation options
@@ -780,76 +855,43 @@ $ToolBool = Get-UserInput -Question "Install 'Chocolatey' (and other common tool
 $WSL2Bool = Get-UserInput -Question "Install 'Windows Subsystem for Linux' (WSL2)?"
 
 
-#Create a "Drive" to access the HKCR (HKEY_CLASSES_ROOT)
-Write-Host "`n──────────────────────────────────────────────────────────────────────────────"
-Write-Host "Creating PSDrive 'HKCR' (HKEY_CLASSES_ROOT).`n(This is necessary for the removal and modification of specific registry keys)"  -ForegroundColor Magenta
-Write-Host "──────────────────────────────────────────────────────────────────────────────"
+# Create a "Drive" to access the HKCR -- this is required for the removal / modification of certain reg keys.
+Start-Function -Message "Creating PSDrive 'HKCR' (HKEY_CLASSES_ROOT)"
 New-PSDrive HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT
-Start-Sleep 1
 
 
 # Remove Bloatware
-Write-Host "`n─────────────────────────────"
-Write-Host "Removing Windows 10 Bloatware" -ForegroundColor Magenta
-Write-Host "─────────────────────────────"
-Remove-WindowsBloat
-Start-Sleep 1
+Start-Function -Message "Removing Windows 10/11 Bloatware" -Invoke "Remove-WindowsBloat"
 
 
 # Improve User Privacy
-Write-Host "`n──────────────────────"
-Write-Host "Hardening User Privacy" -ForegroundColor Magenta
-Write-Host "──────────────────────"
-Protect-Privacy
-Start-Sleep 1
+Start-Function -Message "Hardening User Privacy" -Invoke "Protect-Privacy"
 
 
 # Beautify, Repair, and Speed Up User Experience
-Write-Host "`n─────────────────────────"
-Write-Host "Enhancing User Experience" -ForegroundColor Magenta
-Write-Host "─────────────────────────"
-Enhance-UserExperience
-Start-Sleep 1
+Start-Function -Message "Enhancing User Experience" -Invoke "Enhance-UserExperience"
 
 
 # Install Commonly Downloaded Utilities; Update Existing Features
-Write-Host "`n───────────────────────────"
-Write-Host "Updating & Installing Tools" -ForegroundColor Magenta
-Write-Host "───────────────────────────"
-Get-TheBasics
-Start-Sleep 1
+Start-Function -Message "Updating & Installing Tools" -Invoke "Get-TheBasics"
 
 
 # Install WSL2
-if ($WSL2Bool) {
-    Write-Host "`n──────────────────────────────────────"
-    Write-Host "Installing Windows Subsystem for Linux" -ForegroundColor Magenta
-    Write-Host "──────────────────────────────────────"
-    Install-WSL2
-    Start-Sleep 1
-}
+if ($WSL2Bool) { Start-Function -Message "Installing Windows Subsystem for Linux" -Invoke "Install-WSL2" }
 
 
 # Unload the Created "Drive" from the First Step
-Write-Host "`n───────────────────────"
-Write-Host "Removing PSDrive 'HKCR'" -ForegroundColor Magenta
-Write-Host "───────────────────────"
-Remove-PSDrive HKCR
-Write-Host "Done." -ForegroundColor Green
-Start-Sleep 1
+Start-Function -Message "Removing PSDrive 'HKCR'"
+Try   { Remove-PSDrive HKCR ; Write-Host "Sucessfully disabled PSDrive 'HKCR' (HKEY_CLASSES_ROOT)." }
+Catch { Write-Host "Failed to remove PSDrive 'HKCR' (HKEY_CLASSES_ROOT)." -ForegroundColor Red      }
 
 
 # Remove Internet Explorer and/or Reboot System
 if ((Get-WindowsOptionalFeature -Online -FeatureName NetFx3).State -eq 'Enabled') {
-    Write-Host "`n───────────────────────"
-    Write-Host "Removing IE & Rebooting" -ForegroundColor Magenta
-    Write-Host "───────────────────────"
-    Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online
+    Start-Function -Message "Removing IE & Rebooting" -Invoke "Disable-WindowsOptionalFeature -FeatureName Internet-Explorer-Optional-amd64 -Online"     
 }
 else {
-    Write-Host "`n─────────"
-    Write-Host "Rebooting" -ForegroundColor Magenta
-    Write-Host "─────────"
+    Start-Function -Message "Rebooting"
     $ReBool = Get-UserInput -Question 'Would you like to reboot your computer now?'
     if ($ReBool) { shutdown /r /t 5 }
 }
