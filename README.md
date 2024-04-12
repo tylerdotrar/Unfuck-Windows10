@@ -18,7 +18,8 @@ Run with elevated privileges (i.e., Administrator)
 iex ([System.Net.WebClient]::new().DownloadString('https://git.io/JspIT'))
 ```
 
-![Syntax](https://cdn.discordapp.com/attachments/620986290317426698/847198765147357184/unknown.png)
+![Syntax](https://github.com/tylerdotrar/Unfuck-Windows10/assets/69973771/932c0a0d-7a6a-4a26-9151-fb54400caf30)
+
 
 ## Functionality
 
@@ -80,25 +81,16 @@ iex ([System.Net.WebClient]::new().DownloadString('https://git.io/JspIT'))
 
 ## Gallery
 
-![FreshOS](https://cdn.discordapp.com/attachments/620986290317426698/846631197277683732/unknown.png)
-```
-Fresh Windows 10 Install
-```
+- `Fresh install of Windows 10`
+
+![FreshOS](https://github.com/tylerdotrar/Unfuck-Windows10/assets/69973771/9e386ac2-0db2-4ec7-b570-f02b0d47d1d2)
+
+- `Example Verbosity`
+
+![Verbosity](https://github.com/tylerdotrar/Unfuck-Windows10/assets/69973771/f4cd6790-440f-4385-8cbc-ae818221f34b)
 
 
-![FinalResult](https://cdn.discordapp.com/attachments/620986290317426698/846634838298591232/unknown.png)
-```
-Unfucked Windows 10
-```
+- `Unfucked Windows 10`
 
+![FinalResult](https://github.com/tylerdotrar/Unfuck-Windows10/assets/69973771/90b2020d-7e6d-49c8-893c-d0cbbd9b9aff)
 
-![Verbose1](https://cdn.discordapp.com/attachments/620986290317426698/847202229776941056/unknown.png)
-```
-(1) Example Verbosity
-```
-
-
-![Verbose2](https://cdn.discordapp.com/attachments/620986290317426698/847202243886579722/unknown.png)
-```
-(2) Example Verbosity
-```
